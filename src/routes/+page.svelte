@@ -92,13 +92,14 @@
 	{/if}
 </div>
 
-<ChordReader 
-	isOpen={readerOpen} 
-	onClose={closeDrawers} 
+<ChordReader
+	isOpen={readerOpen}
+	songId={viewingSongId}
+	onClose={closeDrawers}
 	onEdit={() => {
 		readerOpen = false;
 		if (viewingSongId) openEdit(viewingSongId);
-	}} 
+	}}
 />
 
 <ChordActions 

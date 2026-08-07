@@ -75,6 +75,17 @@ export async function toggleFavourite(id: string): Promise<void> {
   }
 }
 
+// Chord Reader display toggles (§7.2) — font size / chord colour are per-song
+// fields that also seed the rolling AppSettings default (see updateSettings
+// calls at each call site). Partial update, not a full put, so we don't need
+// to round-trip parsedLines/chordList just to tweak display prefs.
+export async function updateSongDisplay(
+  id: string,
+  updates: Partial<Pick<Song, 'fontSize' | 'chordColour'>>
+): Promise<void> {
+  await db.songs.update(id, updates);
+}
+
 // --- CRUD Operations for AppSettings ---
 
 const DEFAULT_SETTINGS: AppSettings = {
