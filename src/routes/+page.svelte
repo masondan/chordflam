@@ -4,6 +4,8 @@
 	import ChordReader from '$lib/components/ChordReader.svelte';
 	import ChordActions from '$lib/components/ChordActions.svelte';
 	import { getAllSongs, toggleFavourite, type Song } from '$lib/db/db';
+	import logotype from '../assets/logos/logo-chordflam-logotype.png';
+	import watermark from '../assets/logos/logo-chordflam-maskable.png';
 
 	let readerOpen = $state(false);
 	let actionsOpen = $state(false);
@@ -54,10 +56,10 @@
 <div class="library">
 	<header>
 		<div class="logo">
-			<img src="/src/assets/logos/logo-chordflam-logotype.png" alt="ChordFlam" height="32" />
+			<img src={logotype} alt="ChordFlam" height="32" />
 		</div>
 	</header>
-	
+
 	<div class="toolbar">
 		<button class="btn btn-primary" onclick={openAdd}>Add Chords</button>
 		<button class="btn">Search</button>
@@ -65,30 +67,30 @@
 	</div>
 
 	{#if songs.length === 0}
-	<div class="empty-state">
-		<img src="/src/assets/logos/logo-chordflam-maskable.png" alt="" class="watermark" />
-		<p>Your library is empty</p>
-		<button class="btn btn-primary" onclick={openAdd}>Add your first sheet</button>
-	</div>
+		<div class="empty-state">
+			<img src={watermark} alt="" class="watermark" />
+			<p>Your library is empty</p>
+			<button class="btn btn-primary" onclick={openAdd}>Add your first sheet</button>
+		</div>
 	{:else}
-	<div class="songs">
-		<h3>All Songs</h3>
-		{#each songs as song (song.id)}
-			<div class="song-card">
-				<div>
-					<strong>{song.title}</strong><br>
-					<small>{song.artist ?? 'Unknown artist'} - Key: {song.currentKey}</small>
+		<div class="songs">
+			<h3>All Songs</h3>
+			{#each songs as song (song.id)}
+				<div class="song-card">
+					<div>
+						<strong>{song.title}</strong><br />
+						<small>{song.artist ?? 'Unknown artist'} - Key: {song.currentKey}</small>
+					</div>
+					<div class="actions">
+						<button class="btn-icon" onclick={() => handleToggleFavourite(song.id)}>
+							{song.isFavourite ? '♥' : '♡'}
+						</button>
+						<button class="btn-icon" onclick={() => openReader(song.id)}>View</button>
+						<button class="btn-icon" onclick={() => openEdit(song.id)}>Edit</button>
+					</div>
 				</div>
-				<div class="actions">
-					<button class="btn-icon" onclick={() => handleToggleFavourite(song.id)}>
-						{song.isFavourite ? '♥' : '♡'}
-					</button>
-					<button class="btn-icon" onclick={() => openReader(song.id)}>View</button>
-					<button class="btn-icon" onclick={() => openEdit(song.id)}>Edit</button>
-				</div>
-			</div>
-		{/each}
-	</div>
+			{/each}
+		</div>
 	{/if}
 </div>
 
@@ -102,11 +104,7 @@
 	}}
 />
 
-<ChordActions 
-	isOpen={actionsOpen} 
-	{editingSongId} 
-	onClose={closeDrawers} 
-/>
+<ChordActions isOpen={actionsOpen} {editingSongId} onClose={closeDrawers} />
 
 <style>
 	.library {

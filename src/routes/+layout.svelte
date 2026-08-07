@@ -1,13 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import '../app.css';
-	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();
-</script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
+	// Register the offline-caching service worker (Phase 6 — Branding & PWA).
+	// Dev mode skips this so `vite dev` doesn't fight with cached responses.
+	onMount(() => {
+		if (browser && 'serviceWorker' in navigator && import.meta.env.PROD) {
+			navigator.serviceWorker.register('/service-worker.js', { type: 'module' });
+		}
+	});
+</script>
 
 <div class="app-container">
 	{@render children()}
