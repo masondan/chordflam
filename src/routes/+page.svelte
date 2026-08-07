@@ -13,6 +13,26 @@
 	let viewingSongId = $state<string | null>(null);
 	let songs = $state<Song[]>([]);
 
+	// Group songs alphabetically by first letter of title (§7.1), sorted
+	// case-insensitively within each group. Titles starting with a non-letter
+	// character are grouped under "#".
+	type SongGroup = { letter: string; songs: Song[] };
+	let groupedSongs = $derived.by((): SongGroup[] => {
+		const sorted = [...songs].sort((a, b) =>
+			a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+		);
+		const groups = new Map<string, Song[]>();
+		for (const song of sorted) {
+			const firstChar = song.title.trim().charAt(0).toUpperCase();
+			const letter = /[A-Z]/.test(firstChar) ? firstChar : '#';
+			if (!groups.has(letter)) groups.set(letter, []);
+			groups.get(letter)!.push(song);
+		}
+		return Array.from(groups.entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([letter, songs]) => ({ letter, songs }));
+	});
+
 	// Dexie/IndexedDB only exists in the browser — calling it during SSR (or at
 	// module-eval time) throws, which previously surfaced as an unhandled promise
 	// rejection that crashed the entire Vite dev server. All DB access here is
@@ -75,19 +95,24 @@
 	{:else}
 		<div class="songs">
 			<h3>All Songs</h3>
-			{#each songs as song (song.id)}
-				<div class="song-card">
-					<div>
-						<strong>{song.title}</strong><br />
-						<small>{song.artist ?? 'Unknown artist'} - Key: {song.currentKey}</small>
-					</div>
-					<div class="actions">
-						<button class="btn-icon" onclick={() => handleToggleFavourite(song.id)}>
-							{song.isFavourite ? '♥' : '♡'}
-						</button>
-						<button class="btn-icon" onclick={() => openReader(song.id)}>View</button>
-						<button class="btn-icon" onclick={() => openEdit(song.id)}>Edit</button>
-					</div>
+			{#each groupedSongs as group (group.letter)}
+				<div class="letter-group">
+					<div class="letter-header">{group.letter}</div>
+					{#each group.songs as song (song.id)}
+						<div class="song-card">
+							<div>
+								<strong>{song.title}</strong><br />
+								<small>{song.artist ?? 'Unknown artist'} - Key: {song.currentKey}</small>
+							</div>
+							<div class="actions">
+								<button class="btn-icon" onclick={() => handleToggleFavourite(song.id)}>
+									{song.isFavourite ? '♥' : '♡'}
+								</button>
+								<button class="btn-icon" onclick={() => openReader(song.id)}>View</button>
+								<button class="btn-icon" onclick={() => openEdit(song.id)}>Edit</button>
+							</div>
+						</div>
+					{/each}
 				</div>
 			{/each}
 		</div>
@@ -133,6 +158,19 @@
 		width: 120px;
 		opacity: 0.1;
 		margin-bottom: var(--space-md);
+	}
+	.letter-group {
+		margin-bottom: var(--space-md);
+	}
+	.letter-header {
+		font-size: 0.875rem;
+		font-weight: 700;
+		color: var(--text-secondary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: var(--space-xs) 0;
+		margin-bottom: var(--space-xs);
+		border-bottom: 1px solid var(--color-border);
 	}
 	.song-card {
 		display: flex;

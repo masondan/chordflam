@@ -118,7 +118,7 @@ AppSettings {
 ```
 Launch app
   ↓
-Chord Library: Recent Songs (last 3) + All Songs (alphabetical, searchable, favourite-filterable)
+Chord Library: All Songs (alphabetical, searchable, favourite-filterable) — Recent Songs deferred, see §9
   ↓
 Tap View icon on a song → Chord Reader (read-only)
   ↓
@@ -311,7 +311,7 @@ src/lib/
   - On desktop, Search can be an expanded input directly.
   - Search is case-insensitive, fuzzy, matched against title and artist.
   - Favourites is a heart icon/button that filters the main song list to favourited songs only.
-- **Recent Songs**: last three created/played, displayed in the same song-list card style as All Songs.
+- **Recent Songs**: deferred — see §9. Ambiguity over "created" vs. "last opened" ordering needs a data-model decision (`lastOpenedAt` field) before implementing.
 - **All Songs**: alphabetical with letter-group headers. Each song is a rounded card showing: Title, Artist, Current Key, **View icon**, **Favourite icon**, **Edit icon**.
   - Tapping **View** → opens Chord Reader.
   - Tapping **Edit** → opens Chord Actions (Edit mode, pre-filled).
@@ -388,7 +388,7 @@ Toolbar: Keyboard show/hide · smaller text · larger text · Chord colour · Ed
 
 ### Phase 3 — Core UI Shell
 
-- Chord Library: header (logo only, no settings icon), button row (`Add Chords` / `Search` / `Favourites`), Recent Songs (last 3), All Songs (alphabetical with letter-group headers), rounded song cards showing Title / Artist / Current Key / View / Favourite / Edit icons.
+- Chord Library: header (logo only, no settings icon), button row (`Add Chords` / `Search` / `Favourites`), All Songs (alphabetical with letter-group headers), rounded song cards showing Title / Artist / Current Key / View / Favourite / Edit icons. Recent Songs deferred, see §9.
 - Desktop: centred 480px viewport, matching other Flam apps.
 - Drawer mechanics: full-screen overlay drawers (Chord Reader, Chord Actions), matching existing Flam transition pattern.
 - Wire open triggers: tap View → Chord Reader; tap Edit → Chord Actions (Edit mode); tap `[Add Chords]` → Chord Actions (Add mode, `editingSongId = null`).
@@ -446,7 +446,7 @@ Toolbar: Keyboard show/hide · smaller text · larger text · Chord colour · Ed
 
 - Bookmarklet/share-target capture from source sites.
 - Cross-device sync or cloud backup.
-- Difficulty rating, last-played tracking.
+- Difficulty rating, last-played tracking, and the Chord Library "Recent Songs" list (ambiguous whether ordering should be by creation or last-opened; needs a `lastOpenedAt` field decision — revisit in next UX pass).
 - Chord sheet simplify/elaborate (algorithmic or AI-assisted).
 - Autoscroll.
 - "Search and open source site" quick-link button (small/cheap, could be pulled forward late in Phase 4 if time allows).
