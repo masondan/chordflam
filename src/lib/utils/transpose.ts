@@ -1,6 +1,34 @@
 import { Chord, Note } from 'tonal';
 
 /**
+ * Extracts just the tonic (root note) from a chord/key symbol, e.g. "Am7" -> "A", "F#m" -> "F#".
+ */
+function extractTonic(symbol: string): string {
+  const [tonic] = Chord.tokenize(symbol);
+  return tonic || symbol;
+}
+
+/**
+ * Computes the signed semitone distance needed to transpose `fromKey` to `toKey`,
+ * normalised to the range -6..+5 (shortest direction). Only the tonic/pitch-class
+ * is considered — quality (major/minor) is ignored, since key labels like "Am"
+ * and "C" still just need a pitch-class shift.
+ */
+export function semitoneDistance(fromKey: string, toKey: string): number {
+  const fromChroma = Note.chroma(extractTonic(fromKey));
+  const toChroma = Note.chroma(extractTonic(toKey));
+
+  if (fromChroma === undefined || toChroma === undefined) {
+    return 0;
+  }
+
+  let diff = (toChroma - fromChroma) % 12;
+  if (diff > 6) diff -= 12;
+  if (diff < -6) diff += 12;
+  return diff;
+}
+
+/**
  * Transposes a single chord symbol by a given number of semitones.
  */
 export function transposeChord(chordSymbol: string, semitones: number): string {

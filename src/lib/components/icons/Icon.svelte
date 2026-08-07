@@ -1,12 +1,19 @@
 <script lang="ts">
   import { icons, type IconName } from './icons';
 
-  export let name: IconName;
-  export let size: number | string = 24;
-  export let color: string = 'currentColor';
-  export let className: string = '';
+  let {
+    name,
+    size = 24,
+    color = 'currentColor',
+    className = ''
+  }: {
+    name: IconName;
+    size?: number | string;
+    color?: string;
+    className?: string;
+  } = $props();
 
-  $: icon = icons[name];
+  let icon = $derived(icons[name]);
 </script>
 
 {#if icon}

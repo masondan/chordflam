@@ -61,27 +61,99 @@ function mergeChordsAndLyrics(chordLine: string, lyricLine: string): string {
     });
   }
 
-  // Insert chords into lyrics from right to left so indices don't shift
+  if (chords.length === 0) {
+    return lyricLine;
+  }
+
+  // Real-world pastes (UG, Chordu, E-Chords, etc.) are rarely perfectly
+  // column-aligned once copied through different renderers/fonts, so we
+  // don't trust the raw character column directly. Instead, snap each
+  // chord's column to the nearest word boundary in the lyric line:
+  //  - if the column falls inside a word, the chord goes before that word
+  //  - if it falls in a gap, it snaps to the next word's start
+  //  - if it's beyond the last word (trailing/instrumental chord), it
+  //    attaches at the end of the line instead of inside padded whitespace
+  const words: { start: number; end: number }[] = [];
+  const wordRegex = /\S+/g;
+  let wordMatch;
+  while ((wordMatch = wordRegex.exec(lyricLine)) !== null) {
+    words.push({ start: wordMatch.index, end: wordMatch.index + wordMatch[0].length });
+  }
+
+  const snapIndex = (rawIndex: number): number => {
+    for (const w of words) {
+      if (rawIndex >= w.start && rawIndex < w.end) {
+        return w.start;
+      }
+      if (rawIndex < w.start) {
+        return w.start;
+      }
+    }
+    return lyricLine.length;
+  };
+
+  const targets = chords.map((c) => ({ chord: c.chord, index: snapIndex(c.index) }));
+
+  // Insert chords into lyrics from right to left so earlier indices don't shift
   let merged = lyricLine;
-  // If lyric line is shorter than chord line, pad it with spaces
-  if (merged.length < chordLine.length) {
-    merged = merged.padEnd(chordLine.length, ' ');
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const { chord, index } = targets[i];
+    // If attaching past the end of the lyric text (trailing/instrumental chord),
+    // add a separating space so it doesn't fuse onto the last word.
+    const prevChar = merged[index - 1];
+    const needsSpace = index === merged.length && index > 0 && prevChar !== ' ';
+    merged = merged.slice(0, index) + (needsSpace ? ' ' : '') + `[${chord}]` + merged.slice(index);
   }
 
-  for (let i = chords.length - 1; i >= 0; i--) {
-    const { chord, index } = chords[i];
-    // Insert `[Chord]` at the specific index
-    merged = merged.slice(0, index) + `[${chord}]` + merged.slice(index);
-  }
-
-  // Remove multiple spaces that might have been added by padding, but keep semantic spaces
   return merged.replace(/\s+$/, '');
 }
 
 /**
- * Parses bracket notation raw text into structured ParsedLine array and a unique chord list.
+ * Formats a single ParsedLine into two display rows (chord row above lyric row),
+ * suitable for monospace rendering as "chords over lyrics" — used by both the
+ * Chord Actions preview canvas and Chord Reader.
+ *
+ * The lyric row always keeps its natural text/spacing exactly as parsed — it is
+ * NEVER padded to make room for a chord label. Chord labels are positioned at the
+ * column where their lyric segment begins, floating independently above the lyric
+ * row (standard chord-chart convention). This deliberately avoids inserting extra
+ * space characters into the lyric text, which previously caused visible double
+ * spaces / word-gap drift whenever a chord name was wider than 1 character.
  */
-export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordList: string[] } {
+export function formatParsedLineForDisplay(line: ParsedLine): { chordRow: string; lyricRow: string } {
+  let chordRow = '';
+  let lyricRow = '';
+
+  for (const seg of line.segments) {
+    if (seg.chord) {
+      const col = lyricRow.length;
+      if (chordRow.length < col) {
+        // Pad the chord row up to the column where this lyric segment starts.
+        chordRow += ' '.repeat(col - chordRow.length);
+      } else if (chordRow.length > col) {
+        // A previous (wider) chord label already extends past this column —
+        // separate the two labels with a single space rather than gluing them
+        // together or shifting the lyric text.
+        chordRow += ' ';
+      }
+      chordRow += seg.chord;
+    }
+    lyricRow += seg.lyric;
+  }
+
+  return {
+    chordRow: chordRow.replace(/\s+$/, ''),
+    lyricRow: lyricRow.replace(/\s+$/, '')
+  };
+}
+
+/**
+ * Parses bracket notation raw text into structured ParsedLine array and a unique chord list.
+ * Also returns the normalised bracket-notation text so callers can persist it back as the
+ * canonical `rawText` — per the plan, rawText IS bracket notation, so a raw chords-over-lyrics
+ * paste is converted once (on first "Chord It") and from then on is edited as bracket notation.
+ */
+export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordList: string[], normalizedText: string } {
   const normalizedText = normalizeToBracketNotation(rawText);
   const lines = normalizedText.split('\n');
   const parsedLines: ParsedLine[] = [];
@@ -141,6 +213,7 @@ export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordLi
 
   return {
     parsedLines,
-    chordList
+    chordList,
+    normalizedText
   };
 }

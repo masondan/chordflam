@@ -1,4 +1,4 @@
-import { parseSong } from './src/lib/utils/parser';
+import { parseSong, normalizeToBracketNotation } from './src/lib/utils/parser';
 import { transposeRawText, transposeChord } from './src/lib/utils/transpose';
 import { detectKey, isMajorEdit } from './src/lib/utils/keyDetection';
 import { chordToPitchClasses } from './src/lib/utils/chordToKeys';
@@ -15,6 +15,27 @@ F     C      G
 How I wonder what you are
 `;
 console.log(JSON.stringify(parseSong(rawPaste), null, 2));
+
+console.log('\n--- TEST REAL UG PASTE (reported bug) ---');
+const ugPaste = `                C                                  Am
+I feel that room swaying, while the band's playing
+        Gm7                C7                          F
+One of your old favourite songs, from way back when.`;
+
+const normalized = normalizeToBracketNotation(ugPaste);
+console.log('Normalized bracket notation:\n' + normalized);
+
+const ugParsed = parseSong(ugPaste);
+console.log('Chord list:', ugParsed.chordList);
+console.log('Parsed lines (reconstructed):');
+for (const line of ugParsed.parsedLines) {
+  let out = '';
+  for (const seg of line.segments) {
+    if (seg.chord) out += `[${seg.chord}]`;
+    out += seg.lyric;
+  }
+  console.log(out);
+}
 
 console.log('\n--- TEST TRANSPOSE ---');
 console.log('transpose C by +2:', transposeChord('C', 2)); // D
