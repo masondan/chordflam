@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import ChordReader from '$lib/components/ChordReader.svelte';
 	import ChordActions from '$lib/components/ChordActions.svelte';
+	import Icon from '$lib/components/icons/Icon.svelte';
 	import { getAllSongs, toggleFavourite, type Song } from '$lib/db/db';
 	import logotype from '../assets/logos/logo-chordflam-logotype.png';
 	import watermark from '../assets/logos/logo-chordflam-maskable.png';
@@ -13,12 +14,30 @@
 	let viewingSongId = $state<string | null>(null);
 	let songs = $state<Song[]>([]);
 
+	// Toolbar: search text and favourites-only filter (both client-side —
+	// no separate query layer needed for a single-user local library).
+	let searchQuery = $state('');
+	let showFavouritesOnly = $state(false);
+
+	// Songs after applying the search + favourites-only filters, before
+	// alphabetical grouping.
+	let filteredSongs = $derived.by((): Song[] => {
+		const q = searchQuery.trim().toLowerCase();
+		return songs.filter((song) => {
+			if (showFavouritesOnly && !song.isFavourite) return false;
+			if (!q) return true;
+			return (
+				song.title.toLowerCase().includes(q) || (song.artist ?? '').toLowerCase().includes(q)
+			);
+		});
+	});
+
 	// Group songs alphabetically by first letter of title (§7.1), sorted
 	// case-insensitively within each group. Titles starting with a non-letter
 	// character are grouped under "#".
 	type SongGroup = { letter: string; songs: Song[] };
 	let groupedSongs = $derived.by((): SongGroup[] => {
-		const sorted = [...songs].sort((a, b) =>
+		const sorted = [...filteredSongs].sort((a, b) =>
 			a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
 		);
 		const groups = new Map<string, Song[]>();
@@ -79,11 +98,30 @@
 			<img src={logotype} alt="ChordFlam" height="32" />
 		</div>
 	</header>
+	<div class="header-separator"></div>
 
 	<div class="toolbar">
-		<button class="btn btn-primary" onclick={openAdd}>Add Chords</button>
-		<button class="btn">Search</button>
-		<button class="btn">Favourites</button>
+		<div class="search-box">
+			<input
+				type="text"
+				bind:value={searchQuery}
+				placeholder="Search Songs"
+				aria-label="Search songs"
+			/>
+			<Icon name="search" size={20} className="search-icon" />
+		</div>
+		<button
+			class="icon-box"
+			class:active={showFavouritesOnly}
+			aria-pressed={showFavouritesOnly}
+			aria-label="Show favourites only"
+			onclick={() => (showFavouritesOnly = !showFavouritesOnly)}
+		>
+			<Icon name={showFavouritesOnly ? 'heart-fill' : 'heart'} size={20} />
+		</button>
+		<button class="icon-box icon-box-primary" aria-label="Add new chords" onclick={openAdd}>
+			<Icon name="add" size={22} color="#ffffff" />
+		</button>
 	</div>
 
 	{#if songs.length === 0}
@@ -91,6 +129,10 @@
 			<img src={watermark} alt="" class="watermark" />
 			<p>Your library is empty</p>
 			<button class="btn btn-primary" onclick={openAdd}>Add your first sheet</button>
+		</div>
+	{:else if filteredSongs.length === 0}
+		<div class="empty-state">
+			<p>No songs match your search.</p>
 		</div>
 	{:else}
 		<div class="songs">
@@ -138,13 +180,83 @@
 	header {
 		display: flex;
 		justify-content: center;
-		padding: var(--space-md) 0;
+		align-items: center;
+		height: 46px;
+		padding: 0;
+		margin-bottom: var(--space-sm);
+	}
+	.header-separator {
+		width: 100vw;
+		height: 1px;
+		background-color: var(--color-border);
+		margin: 0 calc(-50vw + 50%);
 		margin-bottom: var(--space-md);
 	}
 	.toolbar {
 		display: flex;
+		align-items: stretch;
 		gap: var(--space-sm);
 		margin-bottom: var(--space-lg);
+	}
+	.search-box {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+	}
+	.search-box input {
+		width: 100%;
+		height: 44px;
+		padding: 0 var(--space-xl) 0 var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		font-family: inherit;
+		font-size: var(--text-base);
+		background: var(--bg-main);
+		color: var(--text-primary);
+		box-sizing: border-box;
+	}
+	.search-box input::placeholder {
+		color: var(--text-secondary);
+	}
+	.search-box input:focus {
+		outline: none;
+		border-color: var(--accent-brand);
+	}
+	.search-box :global(.search-icon) {
+		position: absolute;
+		right: var(--space-sm);
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--text-secondary);
+		pointer-events: none;
+	}
+	.icon-box {
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--bg-main);
+		color: var(--text-primary);
+	}
+	.icon-box:hover {
+		border-color: var(--color-border-active, var(--text-secondary));
+	}
+	.icon-box.active {
+		background: var(--accent-brand);
+		border-color: var(--accent-brand);
+		color: #ffffff;
+	}
+	.icon-box-primary {
+		background: var(--accent-brand);
+		border-color: var(--accent-brand);
+	}
+	.icon-box-primary:hover {
+		background: #4a1d99;
+		border-color: #4a1d99;
 	}
 	.empty-state {
 		display: flex;
