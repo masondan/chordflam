@@ -39,12 +39,10 @@ Cloudflare will auto-deploy to `chordflam.pages.dev` — wait for the build to c
 
 ## Step 4: Add Custom Domain (chordflam.flamtools.com)
 1. In **Pages** project settings, go to **Custom domains**
-2. Click **Set up a custom domain**
-3. Enter `chordflam.flamtools.com`
-4. Cloudflare will check DNS — if flamtools.com is already on Cloudflare, it auto-configures
-5. Click **Activate domain**
-
-Verify DNS shows the CNAME pointing to `chordflam.pages.dev`.
+2. Click **Set up a custom domain** button
+3. Enter `chordflam.flamtools.com` (subdomain auto-configured if flamtools.com is on Cloudflare)
+4. Cloudflare validates DNS — should auto-activate if already on Cloudflare
+5. Verify DNS shows CNAME pointing to `chordflam.pages.dev`
 
 ---
 
