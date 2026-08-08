@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { chordToPitchClasses } from '$lib/utils/chordToKeys';
+	import { chordToPitchClasses, type PitchClassRole } from '$lib/utils/chordToKeys';
 
 	let { chordName }: { chordName: string } = $props();
 
@@ -49,24 +49,26 @@
 
 	const totalWidth = $derived(whiteKeys.length * WHITE_KEY_WIDTH + BLACK_KEY_WIDTH / 2);
 
-	// Basic triad (root, 3rd, 5th — plus slash-chord bass if present) per §6.1.
-	// Returned as an ordered array: [root, 3rd, 5th, ?bass].
+	// Basic triad (root, 3rd, 5th), plus a 7th dot when the chord has one,
+	// plus slash-chord bass if present — per §6.1. Returned as an ordered
+	// array: [root, 3rd, 5th, ?7th, ?bass], each tagged with its role so the
+	// diagram can style the 7th dot slightly differently from the triad.
 	const pitchClassArray = $derived(chordToPitchClasses(chordName));
 
 	// Each note in the ordered array gets exactly one dot, placed at the first
 	// (leftmost) key that matches that pitch class and is at or to the right
 	// of the previous dot. This ensures the diagram always reads left-to-right
-	// as root→3rd→5th, matching the UG reference layout.
+	// as root→3rd→5th→7th, matching the UG reference layout.
 	const dotKeys = $derived.by(() => {
 		const allKeys = [...whiteKeys, ...blackKeys].sort((a, b) => a.x - b.x);
-		const result = new Set<string>();
+		const result = new Map<string, PitchClassRole>();
 		let minX = -Infinity; // Start searching from the leftmost key
 
-		for (const targetPc of pitchClassArray) {
+		for (const { pc: targetPc, role } of pitchClassArray) {
 			// Find the first key with this pitch class at or to the right of minX
 			for (const key of allKeys) {
 				if (key.pc === targetPc && key.x >= minX) {
-					result.add(`${key.type}-${key.x}`);
+					result.set(`${key.type}-${key.x}`, role);
 					minX = key.x; // Next note must be at or to the right of this one
 					break;
 				}
@@ -92,22 +94,26 @@
 			/>
 		{/each}
 		{#each whiteKeys as key (key.x)}
-			{#if dotKeys.has(`white-${key.x}`)}
+			{@const role = dotKeys.get(`white-${key.x}`)}
+			{#if role}
 				<circle
 					cx={key.x + WHITE_KEY_WIDTH / 2}
 					cy={WHITE_KEY_HEIGHT - 12}
 					r="4"
 					class="dot dot-on-white"
+					class:dot-seventh={role === 'seventh'}
 				/>
 			{/if}
 		{/each}
 		{#each blackKeys as key (key.x)}
-			{#if dotKeys.has(`black-${key.x}`)}
+			{@const role = dotKeys.get(`black-${key.x}`)}
+			{#if role}
 				<circle
 					cx={key.x + BLACK_KEY_WIDTH / 2}
 					cy={BLACK_KEY_HEIGHT - 9}
 					r="3.5"
 					class="dot dot-on-black"
+					class:dot-seventh={role === 'seventh'}
 				/>
 			{/if}
 		{/each}
@@ -155,5 +161,13 @@
 		fill: white;
 		stroke: #1f1f1f;
 		stroke-width: 1;
+	}
+	/* 7th note dot — a subtly different shade so it reads as "the extra
+	   note" without introducing a new hue (§6.1 black/white/grey-only rule). */
+	.dot-on-white.dot-seventh {
+		fill: #6b6b6b;
+	}
+	.dot-on-black.dot-seventh {
+		fill: #d8d8d8;
 	}
 </style>

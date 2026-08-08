@@ -276,6 +276,7 @@ Adopted per the reference approach — this is a self-contained, low-risk featur
 
 - Use **`tonal`** (`@tonaljs/chord`) for chord-name → note-name resolution. Do not hand-roll interval/enharmonic logic — `tonal` already handles inversions, extended chords, and sharp/flat spelling correctly and is small and well-tested.
 - Convert resolved notes to pitch-class indices (0–11, C=0) for rendering — **this is a pitch-class diagram, not a literal fingering/inversion diagram.** It shows _which notes_, not _which octave or inversion_ to play. This is the right simplification for a beginner and should be stated explicitly in-app or in any help text, so a root-position C and a second-inversion C aren't a source of confusion later.
+- The diagram shows the root-position triad (root, 3rd, 5th) plus, per the 2026-08 UI/UX pass, a single extra dot for the 7th when the chord symbol has one (Maj7, 7, m7, m7♭5, dim7, and further extensions like 9/11/13 which still carry a 7th) — rendered in a slightly different shade (dark grey on white keys, light grey on black keys) so it reads as "the extra note" without introducing a new hue. 9ths/11ths/13ths/6ths beyond the 7th are still never shown individually.
 - Slash chords (`C/E`): include the bass note as an additional highlighted key alongside the notes from the chord quality.
 
 ### 6.2 Component architecture
