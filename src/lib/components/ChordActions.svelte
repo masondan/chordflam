@@ -684,15 +684,12 @@
         <div class="keyboards">
             <KeyboardGrid chordList={liveChordProgression} />
         </div>
-        <hr />
         {/if}
 
         {#if editingSongId}
         <div class="delete-section">
             <button class="btn-danger" onclick={requestDelete}>Delete Chord Sheet</button>
         </div>
-
-        <hr />
         {/if}
         {/if}
 
