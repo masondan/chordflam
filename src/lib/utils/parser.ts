@@ -1,6 +1,36 @@
 import { type ParsedLine, type ParsedSegment } from '../db/db';
 
 /**
+ * Section markers that should not be treated as chords.
+ * Matches patterns like [Verse], [Verse 1], [Verse 2], [Pre-Chorus], etc.
+ */
+const SECTION_MARKERS = [
+  'Verse',
+  'Chorus',
+  'Bridge',
+  'Intro',
+  'Outro',
+  'Pre-Chorus',
+  'Interlude',
+  'Solo',
+  'Coda',
+  'Instrumental'
+];
+
+/**
+ * Regex to detect section markers with optional numbers/suffixes.
+ * Matches: [Verse], [Verse 1], [Verse 2], [Pre-Chorus], etc.
+ */
+const sectionMarkerRegex = new RegExp(
+  `^(${SECTION_MARKERS.join('|')})\\s*(\\d+)?\\s*$`,
+  'i'
+);
+
+function isSectionMarker(text: string): boolean {
+  return sectionMarkerRegex.test(text.trim());
+}
+
+/**
  * Normalises raw text by converting "chords over lyrics" format to bracket notation.
  * If the text already looks like bracket notation, it returns it mostly as-is.
  */
@@ -154,66 +184,74 @@ export function formatParsedLineForDisplay(line: ParsedLine): { chordRow: string
  * paste is converted once (on first "Chord It") and from then on is edited as bracket notation.
  */
 export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordList: string[], normalizedText: string } {
-  const normalizedText = normalizeToBracketNotation(rawText);
-  const lines = normalizedText.split('\n');
-  const parsedLines: ParsedLine[] = [];
-  const chordSet = new Set<string>();
-  const chordList: string[] = []; // maintain order of first appearance
+   const normalizedText = normalizeToBracketNotation(rawText);
+   const lines = normalizedText.split('\n');
+   const parsedLines: ParsedLine[] = [];
+   const chordSet = new Set<string>();
+   const chordList: string[] = []; // maintain order of first appearance
 
-  lines.forEach((line, index) => {
-    const segments: ParsedSegment[] = [];
-    
-    // Split by brackets
-    // Regex matches [Chord] and captures 'Chord'
-    const bracketRegex = /\[(.*?)\]/g;
-    let lastIndex = 0;
-    let match;
+   lines.forEach((line, index) => {
+     const segments: ParsedSegment[] = [];
+     
+     // Split by brackets
+     // Regex matches [Chord] and captures 'Chord'
+     const bracketRegex = /\[(.*?)\]/g;
+     let lastIndex = 0;
+     let match;
 
-    while ((match = bracketRegex.exec(line)) !== null) {
-      // Text before the chord
-      if (match.index > lastIndex) {
-        const lyricBefore = line.slice(lastIndex, match.index);
-        segments.push({ chord: null, lyric: lyricBefore });
-      }
+     while ((match = bracketRegex.exec(line)) !== null) {
+       // Text before the chord
+       if (match.index > lastIndex) {
+         const lyricBefore = line.slice(lastIndex, match.index);
+         segments.push({ chord: null, lyric: lyricBefore });
+       }
 
-      const chord = match[1].trim();
-      if (chord) {
-        if (!chordSet.has(chord)) {
-          chordSet.add(chord);
-          chordList.push(chord);
-        }
-      }
+       const chord = match[1].trim();
+       const isSection = isSectionMarker(chord);
+       
+       if (chord) {
+         // Only add to chord list if it's not a section marker
+         if (!isSection && !chordSet.has(chord)) {
+           chordSet.add(chord);
+           chordList.push(chord);
+         }
+       }
 
-      // We don't push the chord yet, because we need to attach it to the following lyric
-      // We'll peek ahead to see the next text
-      lastIndex = bracketRegex.lastIndex;
-      
-      // Let's find the text until the next bracket or end of line
-      const nextMatchIndex = line.indexOf('[', lastIndex);
-      const lyricAfter = nextMatchIndex !== -1 
-        ? line.slice(lastIndex, nextMatchIndex) 
-        : line.slice(lastIndex);
-        
-      segments.push({ chord: chord, lyric: lyricAfter });
-      lastIndex += lyricAfter.length;
-    }
+       // We don't push the chord yet, because we need to attach it to the following lyric
+       // We'll peek ahead to see the next text
+       lastIndex = bracketRegex.lastIndex;
+       
+       // Let's find the text until the next bracket or end of line
+       const nextMatchIndex = line.indexOf('[', lastIndex);
+       const lyricAfter = nextMatchIndex !== -1
+         ? line.slice(lastIndex, nextMatchIndex)
+         : line.slice(lastIndex);
+       
+       // For section markers, don't include them as a chord — just treat as lyric text
+       if (isSection) {
+         segments.push({ chord: null, lyric: chord + lyricAfter });
+       } else {
+         segments.push({ chord: chord, lyric: lyricAfter });
+       }
+       lastIndex += lyricAfter.length;
+     }
 
-    // If there were no chords, or text remains after the last chord (which shouldn't happen with the logic above)
-    if (lastIndex < line.length && segments.length === 0) {
-      segments.push({ chord: null, lyric: line });
-    } else if (segments.length === 0) {
-       segments.push({ chord: null, lyric: '' });
-    }
+     // If there were no chords, or text remains after the last chord (which shouldn't happen with the logic above)
+     if (lastIndex < line.length && segments.length === 0) {
+       segments.push({ chord: null, lyric: line });
+     } else if (segments.length === 0) {
+        segments.push({ chord: null, lyric: '' });
+     }
 
-    parsedLines.push({
-      id: `line-${index}-${Math.random().toString(36).substr(2, 9)}`,
-      segments
-    });
-  });
+     parsedLines.push({
+       id: `line-${index}-${Math.random().toString(36).substr(2, 9)}`,
+       segments
+     });
+   });
 
-  return {
-    parsedLines,
-    chordList,
-    normalizedText
-  };
-}
+   return {
+     parsedLines,
+     chordList,
+     normalizedText
+   };
+ }
