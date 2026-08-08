@@ -731,12 +731,12 @@
 	{/if}
 
 	{#if showDeleteModal}
-	<div class="modal">
-		<div class="modal-content">
-			<p>Are you sure you want to delete this chord sheet? This cannot be undone.</p>
-			<div class="modal-actions">
-				<button onclick={cancelDelete}>Cancel</button>
-				<button class="btn-danger" onclick={confirmDelete}>Delete</button>
+	<div class="modal-overlay">
+		<div class="delete-modal-content">
+			<p>Delete chord sheet? This cannot be undone.</p>
+			<div class="delete-modal-actions">
+				<button class="btn-modal" onclick={cancelDelete}>Cancel</button>
+				<button class="btn-modal btn-modal-danger" onclick={confirmDelete}>Delete</button>
 			</div>
 		</div>
 	</div>
@@ -1132,10 +1132,57 @@
 		border-radius: var(--radius-md);
 		max-width: 400px;
 	}
-    .modal-actions {
-        display: flex;
-        justify-content: flex-end;
-        gap: var(--space-md);
-        margin-top: var(--space-md);
-    }
+	   .modal-actions {
+	       display: flex;
+	       justify-content: flex-end;
+	       gap: var(--space-md);
+	       margin-top: var(--space-md);
+	   }
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		max-width: var(--app-max-width);
+		margin: 0 auto;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: var(--z-menu);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-md);
+	}
+	.delete-modal-content {
+		background: var(--bg-main);
+		border-radius: var(--radius-md);
+		padding: var(--space-lg);
+		width: 100%;
+		max-width: 340px;
+		box-shadow: var(--shadow-lg);
+	}
+	.delete-modal-content p {
+		margin: 0 0 var(--space-lg) 0;
+		text-align: center;
+	}
+	.delete-modal-actions {
+		display: flex;
+		justify-content: center;
+		gap: var(--space-md);
+	}
+	.btn-modal {
+		flex: 1;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-full);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: var(--text-primary);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.btn-modal.btn-modal-danger {
+		border-color: #d9383a;
+		background: #d9383a;
+		color: #ffffff;
+	}
 </style>

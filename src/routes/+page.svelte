@@ -4,7 +4,7 @@
 	import ChordReader from '$lib/components/ChordReader.svelte';
 	import ChordActions from '$lib/components/ChordActions.svelte';
 	import Icon from '$lib/components/icons/Icon.svelte';
-	import { getAllSongs, toggleFavourite, type Song } from '$lib/db/db';
+	import { getAllSongs, toggleFavourite, deleteSong, type Song } from '$lib/db/db';
 	import logotype from '../assets/logos/logo-chordflam-logotype.png';
 	import watermark from '../assets/logos/logo-chordflam-maskable.png';
 
@@ -13,6 +13,8 @@
 	let editingSongId = $state<string | null>(null);
 	let viewingSongId = $state<string | null>(null);
 	let songs = $state<Song[]>([]);
+	let deleteModalOpen = $state(false);
+	let songToDeleteId = $state<string | null>(null);
 
 	// Where ChordActions should return to on Cancel/Save & Close — set whenever
 	// it's opened, so editing from ChordReader (e.g. to change key) returns the
@@ -109,6 +111,25 @@
 		await toggleFavourite(id);
 		await refreshSongs();
 	}
+
+	function requestDelete(id: string) {
+		songToDeleteId = id;
+		deleteModalOpen = true;
+	}
+
+	function cancelDelete() {
+		deleteModalOpen = false;
+		songToDeleteId = null;
+	}
+
+	async function confirmDeleteSong() {
+		if (songToDeleteId) {
+			await deleteSong(songToDeleteId);
+			await refreshSongs();
+		}
+		deleteModalOpen = false;
+		songToDeleteId = null;
+	}
 </script>
 
 <div class="library">
@@ -181,17 +202,24 @@
 							<div class="actions">
 								<button
 									class="btn-icon"
+									aria-label="Delete song"
+									onclick={() => requestDelete(song.id)}
+								>
+									<Icon name="trash" size={20} color="var(--text-secondary)" />
+								</button>
+								<button
+									class="btn-icon"
 									aria-label="View chords"
 									onclick={() => openReader(song.id)}
 								>
-									<Icon name="view" size={26} color="var(--accent-brand)" />
+									<Icon name="view" size={20} color="var(--text-secondary)" />
 								</button>
 								<button
 									class="btn-icon"
 									aria-label="Edit song"
 									onclick={() => openEdit(song.id)}
 								>
-									<Icon name="edit-fill" size={26} color="var(--accent-brand)" />
+									<Icon name="edit-fill" size={20} color="var(--text-secondary)" />
 								</button>
 								<button
 									class="btn-icon"
@@ -200,8 +228,8 @@
 								>
 									<Icon
 										name={song.isFavourite ? 'heart-fill' : 'heart'}
-										size={26}
-										color="var(--accent-brand)"
+										size={20}
+										color="var(--text-secondary)"
 									/>
 								</button>
 							</div>
@@ -223,6 +251,18 @@
 />
 
 <ChordActions isOpen={actionsOpen} {editingSongId} onClose={closeDrawers} />
+
+{#if deleteModalOpen}
+	<div class="modal-overlay">
+		<div class="modal-content">
+			<p>Delete chord sheet? This cannot be undone.</p>
+			<div class="modal-actions">
+				<button class="btn-modal" onclick={cancelDelete}>Cancel</button>
+				<button class="btn-modal btn-danger" onclick={confirmDeleteSong}>Delete</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.library {
@@ -383,5 +423,52 @@
 		padding: 0;
 		cursor: pointer;
 		line-height: 0;
+	}
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		max-width: var(--app-max-width);
+		margin: 0 auto;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: var(--z-menu);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-md);
+	}
+	.modal-content {
+		background: var(--bg-main);
+		border-radius: var(--radius-md);
+		padding: var(--space-lg);
+		width: 100%;
+		max-width: 340px;
+		box-shadow: var(--shadow-lg);
+	}
+	.modal-content p {
+		margin: 0 0 var(--space-lg) 0;
+		text-align: center;
+	}
+	.modal-actions {
+		display: flex;
+		justify-content: center;
+		gap: var(--space-md);
+	}
+	.btn-modal {
+		flex: 1;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-full);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: var(--text-primary);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.btn-modal.btn-danger {
+		border-color: #d9383a;
+		background: #d9383a;
+		color: #ffffff;
 	}
 </style>
