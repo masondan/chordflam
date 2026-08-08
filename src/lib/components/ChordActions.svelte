@@ -976,6 +976,7 @@
     .delete-section {
         display: flex;
         justify-content: center;
+		margin-top: var(--space-md);
     }
     .btn-danger {
         color: var(--color-danger, #d9383a);
