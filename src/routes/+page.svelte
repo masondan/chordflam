@@ -6,7 +6,7 @@
 	import Icon from '$lib/components/icons/Icon.svelte';
 	import { getAllSongs, toggleFavourite, deleteSong, type Song } from '$lib/db/db';
 	import logotype from '../assets/logos/logo-chordflam-logotype.png';
-	import watermark from '../assets/logos/logo-chordflam-maskable.png';
+	import watermark from '../assets/logos/logo-chordflam-watermark.png';
 
 	let readerOpen = $state(false);
 	let actionsOpen = $state(false);
@@ -147,15 +147,18 @@
 				bind:value={searchQuery}
 				placeholder="Search Songs"
 				aria-label="Search songs"
+				disabled={songs.length === 0}
 			/>
 			<Icon name="search" size={20} className="search-icon" />
 		</div>
 		<button
 			class="icon-box"
 			class:active={showFavouritesOnly}
+			class:disabled={songs.length === 0}
 			aria-pressed={showFavouritesOnly}
 			aria-label="Show favourites only"
 			onclick={() => (showFavouritesOnly = !showFavouritesOnly)}
+			disabled={songs.length === 0}
 		>
 			<Icon name={showFavouritesOnly ? 'heart-fill' : 'heart'} size={20} />
 		</button>
@@ -168,7 +171,7 @@
 		<div class="empty-state">
 			<img src={watermark} alt="" class="watermark" />
 			<p>Your library is empty</p>
-			<button class="btn btn-primary" onclick={openAdd}>Add your first sheet</button>
+			<button class="btn btn-empty-state" onclick={openAdd}>Add a chord sheet</button>
 		</div>
 	{:else if filteredSongs.length === 0}
 		<div class="empty-state">
@@ -313,6 +316,10 @@
 		outline: none;
 		border-color: var(--accent-brand);
 	}
+	.search-box input:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.search-box :global(.search-icon) {
 		position: absolute;
 		right: var(--space-sm);
@@ -341,6 +348,13 @@
 		border-color: var(--accent-brand);
 		color: #ffffff;
 	}
+	.icon-box.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.icon-box.disabled:hover {
+		border-color: var(--color-border);
+	}
 	.icon-box-primary {
 		background: var(--accent-brand);
 		border-color: var(--accent-brand);
@@ -358,9 +372,9 @@
 		color: var(--text-secondary);
 	}
 	.watermark {
-		width: 120px;
-		opacity: 0.1;
-		margin-bottom: var(--space-md);
+		width: 75%;
+		opacity: 0.15;
+		margin-bottom: var(--space-lg);
 	}
 	.letter-group {
 		margin-bottom: var(--space-md);
@@ -470,5 +484,15 @@
 		border-color: #d9383a;
 		background: #d9383a;
 		color: #ffffff;
+	}
+	.btn-empty-state {
+		padding: var(--space-sm) var(--space-lg);
+		border-radius: var(--radius-md);
+		background-color: var(--accent-brand);
+		color: white;
+		font-weight: 600;
+	}
+	.btn-empty-state:hover {
+		background-color: #4a1d99;
 	}
 </style>
