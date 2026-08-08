@@ -696,6 +696,8 @@
         {/if}
         {/if}
 
+        <hr />
+
         <div class="import-export">
             <h3>Import & Export Chord Library</h3>
             <p>Save all chord sheets to share between devices</p>
@@ -1098,6 +1100,11 @@
     }
     .keyboards h3 {
         text-align: center;
+    }
+    hr {
+        border: none;
+        border-top: 1px solid var(--color-separator);
+        margin: var(--space-md) 0;
     }
     .import-export .buttons {
         display: flex;
