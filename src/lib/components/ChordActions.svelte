@@ -83,6 +83,20 @@
 			transposeOffset !== appliedOffset
 	);
 
+	// Once true for this drawer session, stays true — even after "Chord It"
+	// commits and `dirty` goes back to false. "Save & Close" uses this (not
+	// `dirty`) so that tapping Chord It to preview a change never leaves the
+	// user stuck with no way to close the drawer: the button stays active as
+	// both a reassurance and a working close action, even when there is
+	// technically nothing left to save.
+	let hasEverBeenModified = $state(false);
+
+	$effect(() => {
+		if (dirty) {
+			hasEverBeenModified = true;
+		}
+	});
+
 	// Edit/Preview toggle is visible from the start but stays inactive (light
 	// grey, non-clickable) until the user has actually typed/pasted something.
 	let hasContent = $derived(rawText.trim().length > 0);
@@ -175,6 +189,7 @@
 		history = [];
 		redoStack = [];
 		toolbarActive = true;
+		hasEverBeenModified = false;
 		runParse(rawText, { silent: true });
 	}
 
@@ -203,6 +218,7 @@
 		history = [];
 		redoStack = [];
 		toolbarActive = false;
+		hasEverBeenModified = false;
 	}
 
 	function handleCancel() {
@@ -223,11 +239,17 @@
 	}
 
 	async function saveAndClose() {
-		if (!dirty) return;
-		await chordIt();
-		if (!parseError && !saveError) {
-			onClose();
+		if (!hasEverBeenModified) return;
+		if (dirty) {
+			// There's uncommitted work (edits and/or a pending transpose preview
+			// that Chord It hasn't baked in yet) — commit it via the normal
+			// Chord It path before closing.
+			await chordIt();
+			if (parseError || saveError) return;
 		}
+		// If not dirty, everything was already committed by a prior Chord It —
+		// Save & Close just closes the drawer (see note on hasEverBeenModified).
+		onClose();
 	}
 
 	/**
@@ -510,7 +532,12 @@
 <Drawer {isOpen}>
 	<div class="header">
 		<button class="btn-pill" onclick={handleCancel}>Cancel</button>
-		<button class="btn-pill btn-pill-save" class:active={dirty} disabled={!dirty} onclick={saveAndClose}>
+		<button
+			class="btn-pill btn-pill-save"
+			class:active={hasEverBeenModified}
+			disabled={!hasEverBeenModified}
+			onclick={saveAndClose}
+		>
 			Save &amp; Close
 		</button>
 	</div>

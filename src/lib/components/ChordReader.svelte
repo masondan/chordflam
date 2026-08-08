@@ -112,8 +112,8 @@
 
 <Drawer {isOpen}>
 	<div class="header">
-		<button class="btn-icon back-link" onclick={onClose}>
-			<Icon name="chevron-left" size={24} />
+		<button class="btn-back" onclick={() => onClose()}>
+			<Icon name="chevron-left" size={18} />
 			Back to Songs
 		</button>
 	</div>
@@ -219,12 +219,19 @@
 		padding: var(--space-md);
 		justify-content: flex-start;
 	}
-	.back-link {
+	.btn-back {
+		height: 36px;
+		padding: 0 var(--space-md);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: var(--text-secondary);
 		font-weight: 600;
-		font-size: var(--text-h3);
-		padding: var(--space-sm) 0 var(--space-sm) 0;
-		margin-left: calc(var(--space-sm) * -1);
+		font-size: var(--text-sm, 0.9em);
+		display: flex;
+		align-items: center;
 		gap: var(--space-xs);
+		cursor: pointer;
 	}
 	.content {
 		padding: var(--space-md);

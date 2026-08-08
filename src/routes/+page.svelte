@@ -103,8 +103,22 @@
 			readerOpen = true;
 		} else {
 			readerOpen = false;
+			viewingSongId = null;
+			actionsSource = 'library';
 		}
 		await refreshSongs();
+	}
+
+	// ChordReader's own "Back to Songs" must always go straight to the
+	// library, regardless of how the reader got (re)opened. Sharing
+	// closeDrawers between both drawers caused a bug: after an Actions→
+	// Reader round trip, actionsSource stayed 'reader', so tapping Back
+	// to Songs re-entered the "return to reader" branch instead of
+	// closing — the drawer appeared to do nothing.
+	function closeReader() {
+		readerOpen = false;
+		viewingSongId = null;
+		actionsSource = 'library';
 	}
 
 	async function handleToggleFavourite(id: string) {
@@ -247,7 +261,7 @@
 <ChordReader
 	isOpen={readerOpen}
 	songId={viewingSongId}
-	onClose={closeDrawers}
+	onClose={closeReader}
 	onEdit={() => {
 		if (viewingSongId) openEditFromReader(viewingSongId);
 	}}
