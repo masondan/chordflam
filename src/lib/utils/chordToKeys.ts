@@ -48,19 +48,24 @@ export function chordToPitchClasses(chordSymbol: string): number[] {
     return [];
   }
 
-  const pitchClasses = new Set<number>();
-  for (const offset of triadOffsetsForQuality(chord.quality)) {
-    pitchClasses.add((rootPc + offset) % 12);
+  // Return triad notes in order: [root, 3rd, 5th, ...bass].
+  // This ensures the diagram always reads left-to-right as root→3rd→5th
+  // when the keyboard's dots are placed in sequence from the root's position.
+  const result: number[] = [];
+  const offsets = triadOffsetsForQuality(chord.quality);
+  
+  for (const offset of offsets) {
+    result.push((rootPc + offset) % 12);
   }
 
   // Explicit slash-chord bass note (§6.1 exception) — added as an extra dot
   // even though it's not part of the root-position triad above.
   if (chord.bass) {
     const bassPc = Note.chroma(chord.bass);
-    if (bassPc !== undefined) {
-      pitchClasses.add(bassPc);
+    if (bassPc !== undefined && !result.includes(bassPc)) {
+      result.push(bassPc);
     }
   }
 
-  return Array.from(pitchClasses).sort((a, b) => a - b);
+  return result;
 }

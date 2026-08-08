@@ -50,20 +50,26 @@
 	const totalWidth = $derived(whiteKeys.length * WHITE_KEY_WIDTH + BLACK_KEY_WIDTH / 2);
 
 	// Basic triad (root, 3rd, 5th — plus slash-chord bass if present) per §6.1.
-	const activePitchClasses = $derived(new Set(chordToPitchClasses(chordName)));
+	// Returned as an ordered array: [root, 3rd, 5th, ?bass].
+	const pitchClassArray = $derived(chordToPitchClasses(chordName));
 
-	// Each active note gets exactly one dot, on its first (leftmost) occurrence
-	// on the keyboard — a pitch class can technically recur further right in
-	// the padding keys, but the reference diagram only ever shows one dot per
-	// note, so later duplicates are intentionally left undotted.
+	// Each note in the ordered array gets exactly one dot, placed at the first
+	// (leftmost) key that matches that pitch class and is at or to the right
+	// of the previous dot. This ensures the diagram always reads left-to-right
+	// as root→3rd→5th, matching the UG reference layout.
 	const dotKeys = $derived.by(() => {
 		const allKeys = [...whiteKeys, ...blackKeys].sort((a, b) => a.x - b.x);
-		const seen = new Set<number>();
 		const result = new Set<string>();
-		for (const key of allKeys) {
-			if (activePitchClasses.has(key.pc) && !seen.has(key.pc)) {
-				seen.add(key.pc);
-				result.add(`${key.type}-${key.x}`);
+		let minX = -Infinity; // Start searching from the leftmost key
+
+		for (const targetPc of pitchClassArray) {
+			// Find the first key with this pitch class at or to the right of minX
+			for (const key of allKeys) {
+				if (key.pc === targetPc && key.x >= minX) {
+					result.add(`${key.type}-${key.x}`);
+					minX = key.x; // Next note must be at or to the right of this one
+					break;
+				}
 			}
 		}
 		return result;
