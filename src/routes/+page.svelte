@@ -14,6 +14,11 @@
 	let viewingSongId = $state<string | null>(null);
 	let songs = $state<Song[]>([]);
 
+	// Where ChordActions should return to on Cancel/Save & Close — set whenever
+	// it's opened, so editing from ChordReader (e.g. to change key) returns the
+	// user to ChordReader rather than always dropping back to chordLibrary.
+	let actionsSource = $state<'library' | 'reader'>('library');
+
 	// Toolbar: search text and favourites-only filter (both client-side —
 	// no separate query layer needed for a single-user local library).
 	let searchQuery = $state('');
@@ -67,11 +72,20 @@
 
 	function openAdd() {
 		editingSongId = null;
+		actionsSource = 'library';
 		actionsOpen = true;
 	}
 
 	function openEdit(id: string) {
 		editingSongId = id;
+		actionsSource = 'library';
+		actionsOpen = true;
+	}
+
+	function openEditFromReader(id: string) {
+		editingSongId = id;
+		actionsSource = 'reader';
+		readerOpen = false;
 		actionsOpen = true;
 	}
 
@@ -80,9 +94,14 @@
 		readerOpen = true;
 	}
 
-	async function closeDrawers() {
-		readerOpen = false;
+	async function closeDrawers(opts?: { returnToLibrary?: boolean }) {
 		actionsOpen = false;
+		if (actionsSource === 'reader' && !opts?.returnToLibrary) {
+			// Return to Chord Reader for the same song (e.g. user only changed key).
+			readerOpen = true;
+		} else {
+			readerOpen = false;
+		}
 		await refreshSongs();
 	}
 
@@ -136,22 +155,55 @@
 		</div>
 	{:else}
 		<div class="songs">
-			<h3>All Songs</h3>
 			{#each groupedSongs as group (group.letter)}
 				<div class="letter-group">
 					<div class="letter-header">{group.letter}</div>
 					{#each group.songs as song (song.id)}
 						<div class="song-card">
-							<div>
-								<strong>{song.title}</strong><br />
-								<small>{song.artist ?? 'Unknown artist'} - Key: {song.currentKey}</small>
+							<div class="song-info">
+								<a
+									class="song-title"
+									href={'#'}
+									onclick={(e) => {
+										e.preventDefault();
+										openReader(song.id);
+									}}
+								>
+									{song.title}
+								</a>
+								{#if song.artist}
+									<div class="song-artist">{song.artist}</div>
+								{/if}
+								<div class="song-key">
+									Original Key: {song.originalKey ?? '–'} | Current: {song.currentKey}
+								</div>
 							</div>
 							<div class="actions">
-								<button class="btn-icon" onclick={() => handleToggleFavourite(song.id)}>
-									{song.isFavourite ? '♥' : '♡'}
+								<button
+									class="btn-icon"
+									aria-label="View chords"
+									onclick={() => openReader(song.id)}
+								>
+									<Icon name="view" size={26} color="var(--accent-brand)" />
 								</button>
-								<button class="btn-icon" onclick={() => openReader(song.id)}>View</button>
-								<button class="btn-icon" onclick={() => openEdit(song.id)}>Edit</button>
+								<button
+									class="btn-icon"
+									aria-label="Edit song"
+									onclick={() => openEdit(song.id)}
+								>
+									<Icon name="edit-fill" size={26} color="var(--accent-brand)" />
+								</button>
+								<button
+									class="btn-icon"
+									aria-label={song.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+									onclick={() => handleToggleFavourite(song.id)}
+								>
+									<Icon
+										name={song.isFavourite ? 'heart-fill' : 'heart'}
+										size={26}
+										color="var(--accent-brand)"
+									/>
+								</button>
 							</div>
 						</div>
 					{/each}
@@ -166,8 +218,7 @@
 	songId={viewingSongId}
 	onClose={closeDrawers}
 	onEdit={() => {
-		readerOpen = false;
-		if (viewingSongId) openEdit(viewingSongId);
+		if (viewingSongId) openEditFromReader(viewingSongId);
 	}}
 />
 
@@ -287,14 +338,50 @@
 	.song-card {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
 		padding: var(--space-md);
 		background: var(--bg-surface);
 		border-radius: var(--radius-md);
 		margin-bottom: var(--space-sm);
 	}
+	.song-info {
+		min-width: 0;
+	}
+	.song-title {
+		display: block;
+		color: var(--accent-brand);
+		font-weight: 700;
+		font-size: var(--text-base);
+		text-decoration: none;
+	}
+	.song-title:hover {
+		text-decoration: underline;
+	}
+	.song-artist {
+		font-size: var(--text-sm, 0.875rem);
+		color: var(--text-secondary);
+		margin-top: 2px;
+	}
+	.song-key {
+		font-size: var(--text-xs, 0.75rem);
+		color: var(--text-secondary);
+		margin-top: var(--space-xs);
+	}
 	.actions {
 		display: flex;
+		align-items: center;
 		gap: var(--space-sm);
+		flex-shrink: 0;
+		padding-top: 1px;
+	}
+	.actions .btn-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		line-height: 0;
 	}
 </style>

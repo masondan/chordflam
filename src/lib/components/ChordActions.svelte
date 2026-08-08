@@ -1,8 +1,9 @@
 <script lang="ts">
 	import Drawer from './Drawer.svelte';
 	import KeyboardGrid from './KeyboardGrid.svelte';
+	import Icon from './icons/Icon.svelte';
 	import { parseSong, formatParsedLineForDisplay } from '$lib/utils/parser';
-	import { transposeRawText, transposeChord } from '$lib/utils/transpose';
+	import { transposeRawText, transposeChord, semitoneDistance } from '$lib/utils/transpose';
 	import { detectKey, isMajorEdit } from '$lib/utils/keyDetection';
 	import {
 		getSong,
@@ -19,7 +20,7 @@
 	let { isOpen, editingSongId, onClose } = $props<{
 		isOpen: boolean;
 		editingSongId: string | null;
-		onClose: () => void;
+		onClose: (opts?: { returnToLibrary?: boolean }) => void;
 	}>();
 
 	// --- Core form/song state ---
@@ -36,7 +37,16 @@
 	// Key tracking (§5.5, §5.9)
 	let originalKey = $state('');
 	let currentKey = $state('');
+	// transposeOffset is always the number of semitone steps away from
+	// originalKey — this is what the transpose UI displays and what the
+	// chevrons/Revert control. It is NOT reset by "Chord It"; it persists
+	// as the song's ongoing distance from its original key.
 	let transposeOffset = $state(0);
+	// appliedOffset is the offset that is currently "baked into" rawText/
+	// chordList/currentKey (i.e. what was in effect as of the last Chord It,
+	// or on load). The delta between transposeOffset and appliedOffset is
+	// the pending, not-yet-committed preview change.
+	let appliedOffset = $state(0);
 
 	// Fields not edited directly in this drawer but must round-trip on save
 	let fontSize = $state(18);
@@ -70,19 +80,43 @@
 		title !== committed.title ||
 			artist !== committed.artist ||
 			rawText !== committed.rawText ||
-			transposeOffset !== 0
+			transposeOffset !== appliedOffset
 	);
+
+	// Edit/Preview toggle is visible from the start but stays inactive (light
+	// grey, non-clickable) until the user has actually typed/pasted something.
+	let hasContent = $derived(rawText.trim().length > 0);
+
+	// Toolbar (bracket/flat/sharp/copy/undo/redo) is permanently visible but
+	// stays inactive (light grey) until the user taps into the input window —
+	// this lets someone type lyrics/chords manually and use the toolbar to
+	// help build the sheet, before ever tapping Chord It. Once activated it
+	// stays active for the rest of the drawer session, and also activates
+	// immediately for existing content (e.g. loading a saved song).
+	let toolbarActive = $state(false);
+
+	function onTextareaFocus() {
+		toolbarActive = true;
+	}
+
+	// Pending, not-yet-committed transpose change (semitones) — the delta
+	// between what the user has dialled in and what's actually baked into
+	// rawText/chordList right now.
+	let pendingDelta = $derived(transposeOffset - appliedOffset);
 
 	// Live transpose preview (§5.9) — updates key/chord-progression display only;
 	// mini-keyboards and rawText are NOT touched until "Chord It" commits.
+	// Always relative to originalKey, which never moves except on a major
+	// re-detection — so this is always "steps away from original", even
+	// right after a Chord It commit.
 	let liveCurrentKey = $derived.by(() => {
-		if (!currentKey) return '';
-		return transposeOffset === 0 ? currentKey : transposeChord(currentKey, transposeOffset);
+		if (!originalKey) return '';
+		return transposeOffset === 0 ? originalKey : transposeChord(originalKey, transposeOffset);
 	});
 
 	let liveChordProgression = $derived.by(() => {
-		if (transposeOffset === 0) return chordList;
-		return chordList.map((c) => transposeChord(c, transposeOffset));
+		if (pendingDelta === 0) return chordList;
+		return chordList.map((c) => transposeChord(c, pendingDelta));
 	});
 
 	let transposeOffsetLabel = $derived(transposeOffset > 0 ? `+${transposeOffset}` : `${transposeOffset}`);
@@ -124,7 +158,11 @@
 		rawText = song.rawText;
 		originalKey = song.originalKey ?? '';
 		currentKey = song.currentKey;
-		transposeOffset = 0;
+		// Reconstruct the offset-from-original so the transpose UI opens showing
+		// how far the song currently sits from its (immutable) original key.
+		const savedOffset = originalKey ? semitoneDistance(originalKey, currentKey) : 0;
+		transposeOffset = savedOffset;
+		appliedOffset = savedOffset;
 		fontSize = song.fontSize;
 		chordColour = song.chordColour;
 		isFavourite = song.isFavourite;
@@ -136,6 +174,7 @@
 		parseError = false;
 		history = [];
 		redoStack = [];
+		toolbarActive = true;
 		runParse(rawText, { silent: true });
 	}
 
@@ -149,6 +188,7 @@
 		originalKey = '';
 		currentKey = '';
 		transposeOffset = 0;
+		appliedOffset = 0;
 		fontSize = settings.defaultFontSize;
 		chordColour = settings.defaultChordColour;
 		isFavourite = false;
@@ -162,9 +202,10 @@
 		parseError = false;
 		history = [];
 		redoStack = [];
+		toolbarActive = false;
 	}
 
-	function handleClose() {
+	function handleCancel() {
 		if (dirty) {
 			showUnsavedModal = true;
 		} else {
@@ -179,6 +220,14 @@
 
 	function cancelClose() {
 		showUnsavedModal = false;
+	}
+
+	async function saveAndClose() {
+		if (!dirty) return;
+		await chordIt();
+		if (!parseError && !saveError) {
+			onClose();
+		}
 	}
 
 	/**
@@ -226,28 +275,42 @@
 		// --- Key detection / preservation (§5.5) ---
 		if (!hadKeyBefore) {
 			// First-ever parse for this song (new song, or first Chord It on an
-			// import that had no key yet): detect fresh.
+			// import that had no key yet): detect fresh. originalKey is brand new,
+			// so any prior transpose dialling is meaningless — reset to 0.
 			originalKey = detectKey(chordList);
 			currentKey = originalKey;
+			transposeOffset = 0;
+			appliedOffset = 0;
 		} else {
 			const major = isMajorEdit(previousChordList, chordList);
 			if (major) {
+				// originalKey is being replaced — any transpose distance from the
+				// *old* original is meaningless now, so reset to 0 as well.
 				originalKey = detectKey(chordList);
 				currentKey = originalKey;
+				transposeOffset = 0;
+				appliedOffset = 0;
 			}
-			// else: minor edit — originalKey/currentKey untouched (§5.5 rule 3).
+			// else: minor edit — originalKey untouched (§5.5 rule 3); transposeOffset
+			// also untouched, since it's still measured relative to the same original.
 		}
 
 		// --- Commit transpose preview, if any (§5.9) ---
-		if (transposeOffset !== 0) {
-			currentKey = transposeChord(currentKey, transposeOffset);
-			rawText = transposeRawText(rawText, transposeOffset);
+		// Chord It just "bakes in" whatever the transpose cluster currently shows.
+		// originalKey never moves here; only the pending delta (the gap between
+		// what's dialled in and what's already baked into rawText) is applied.
+		// transposeOffset itself is NOT reset — it continues to reflect the
+		// song's total distance from originalKey, even after this commit.
+		const deltaToApply = transposeOffset - appliedOffset;
+		if (deltaToApply !== 0) {
+			rawText = transposeRawText(rawText, deltaToApply);
 			// Re-parse the transposed text so parsedLines/chordList reflect new chord names.
 			const retransposed = parseSong(rawText);
 			parsedLines = retransposed.parsedLines;
 			chordList = retransposed.chordList;
-			transposeOffset = 0;
 		}
+		currentKey = transposeOffset === 0 ? originalKey : transposeChord(originalKey, transposeOffset);
+		appliedOffset = transposeOffset;
 
 		hasParsedOnce = true;
 		isPreview = true;
@@ -298,7 +361,7 @@
 	}
 
 	function togglePreview() {
-		if (!hasParsedOnce) return;
+		if (!hasContent) return;
 		isPreview = !isPreview;
 	}
 
@@ -337,22 +400,6 @@
 
 	function insertSharp() {
 		insertAtCursor('#');
-	}
-
-	function cutSelection() {
-		const el = textareaRef;
-		if (!el) return;
-		const start = el.selectionStart ?? 0;
-		const end = el.selectionEnd ?? 0;
-		if (start === end) return;
-		pushHistory();
-		const selected = rawText.slice(start, end);
-		navigator.clipboard?.writeText(selected).catch(() => {});
-		rawText = rawText.slice(0, start) + rawText.slice(end);
-		requestAnimationFrame(() => {
-			el.focus();
-			el.setSelectionRange(start, start);
-		});
 	}
 
 	function copySelection() {
@@ -413,7 +460,9 @@
 		if (workingSongId) {
 			await deleteSong(workingSongId);
 		}
-		onClose();
+		// The song is gone — always return to the library, never back to
+		// Chord Reader (there's nothing left there to show).
+		onClose({ returnToLibrary: true });
 	}
 
 	function cancelDelete() {
@@ -460,8 +509,10 @@
 
 <Drawer {isOpen}>
 	<div class="header">
-		<button class="btn-icon" onclick={handleClose}>&lt; Back</button>
-		<h2>{editingSongId ? 'Edit Song' : 'Add Song'}</h2>
+		<button class="btn-pill" onclick={handleCancel}>Cancel</button>
+		<button class="btn-pill btn-pill-save" class:active={dirty} disabled={!dirty} onclick={saveAndClose}>
+			Save &amp; Close
+		</button>
 	</div>
 	<div class="content">
         <div class="form-group">
@@ -472,13 +523,6 @@
             <label for="artist">Artist</label>
             <input type="text" id="artist" bind:value={artist} placeholder="Artist Name" />
         </div>
-
-        <p class="helper">
-            Paste your chord sheet below.
-            Source links: <a href="https://www.ultimate-guitar.com" target="_blank">Ultimate Guitar</a>,
-            <a href="https://chordu.com" target="_blank">Chordu</a>,
-            <a href="https://www.e-chords.com" target="_blank">E-Chords</a>
-        </p>
 
         {#if parseError}
         <div class="parse-error">
@@ -495,26 +539,75 @@
         </div>
         {/if}
 
-        {#if !isPreview}
-        {#if hasParsedOnce}
         <div class="toolbar">
-            <button onclick={addChordToken}>Add Chord</button>
-            <button onclick={insertFlat}>b</button>
-            <button onclick={insertSharp}>#</button>
-            <button onclick={cutSelection}>Cut</button>
-            <button onclick={copySelection}>Copy</button>
-            <button onclick={undo} disabled={history.length === 0} class="undo-redo" aria-label="Undo">↶</button>
-            <button onclick={redo} disabled={redoStack.length === 0} class="undo-redo" aria-label="Redo">↷</button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
+                onclick={addChordToken}
+                aria-label="Insert chord brackets"
+            >
+                <Icon name="square-brackets" size={18} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
+                onclick={insertFlat}
+                aria-label="Insert flat"
+            >
+                <Icon name="music-flat" size={26} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
+                onclick={insertSharp}
+                aria-label="Insert sharp"
+            >
+                <Icon name="music-sharp" size={26} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
+                onclick={copySelection}
+                aria-label="Copy selection"
+            >
+                <Icon name="copy" size={18} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview || history.length === 0}
+                onclick={undo}
+                aria-label="Undo"
+            >
+                <Icon name="undo" size={18} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview || redoStack.length === 0}
+                onclick={redo}
+                aria-label="Redo"
+            >
+                <Icon name="redo" size={18} />
+            </button>
         </div>
-        {/if}
 
-        <textarea
-            class="canvas"
-            bind:value={rawText}
-            bind:this={textareaRef}
-            oninput={onTextareaInput}
-            placeholder="[Am]Twinkle [C]twinkle..."
-        ></textarea>
+        {#if !isPreview}
+        <div class="textarea-wrapper">
+            <textarea
+                class="canvas"
+                bind:value={rawText}
+                bind:this={textareaRef}
+                oninput={onTextareaInput}
+                onfocus={onTextareaFocus}
+            ></textarea>
+            {#if !rawText}
+            <div class="placeholder-helper">
+                <p>Paste or create a chord sheet</p>
+                <p>Sources: <a href="https://www.ultimate-guitar.com" target="_blank">Ultimate Guitar</a>, <a href="https://chordu.com" target="_blank">Chordu</a>, <a href="https://www.e-chords.com" target="_blank">E-Chords</a></p>
+                <p>Add manual chords in this format:</p>
+                <p>Let it [Am]be, Let it [G]be</p>
+            </div>
+            {/if}
+        </div>
         {:else}
         <div class="preview-canvas">
             {#if parsedLines.length === 0}
@@ -536,46 +629,67 @@
         {/if}
 
         <div class="actions">
-            <button class="primary" onclick={chordIt}>Chord It</button>
-            {#if hasParsedOnce}
-            <button onclick={togglePreview}>{isPreview ? 'Edit' : 'Preview'}</button>
-            {/if}
+            <button class="btn-pill btn-pill-primary" onclick={chordIt}>Chord It</button>
+            <div class="edit-preview-toggle" class:disabled={!hasContent}>
+                <button
+                    type="button"
+                    class="toggle-segment"
+                    class:active={!isPreview}
+                    disabled={!hasContent}
+                    onclick={() => isPreview && togglePreview()}
+                >
+                    Edit
+                </button>
+                <button
+                    type="button"
+                    class="toggle-segment"
+                    class:active={isPreview}
+                    disabled={!hasContent}
+                    onclick={() => !isPreview && togglePreview()}
+                >
+                    Preview
+                </button>
+            </div>
         </div>
 
         {#if hasParsedOnce}
-        <hr />
-
         <div class="transpose">
-            <h3>Transpose</h3>
-            <div class="controls">
-                <button class="btn-icon" onclick={transposeDown} aria-label="Transpose down">▼</button>
-                <span class="key-label">{liveCurrentKey} {transposeOffsetLabel}</span>
-                <button class="btn-icon" onclick={transposeUp} aria-label="Transpose up">▲</button>
+            <span class="transpose-heading">Transpose</span>
+            <div class="transpose-row">
+                <div class="key-selector">
+                    <button class="chevron-btn" onclick={transposeDown} aria-label="Transpose down">
+                        <Icon name="chevron-down" size={18} color="#ffffff" />
+                    </button>
+                    <span class="key-display">{liveCurrentKey}</span>
+                    <span class="key-divider"></span>
+                    <span class="key-steps">{transposeOffsetLabel}</span>
+                    <button class="chevron-btn" onclick={transposeUp} aria-label="Transpose up">
+                        <Icon name="chevron-up" size={18} color="#ffffff" />
+                    </button>
+                </div>
+                <div class="chord-progression">
+                    {#each liveChordProgression as chord (chord)}
+                        <span class="chord-chip">{chord}</span>
+                    {/each}
+                </div>
             </div>
-            <div class="chord-progression">
-                {#each liveChordProgression as chord (chord)}
-                    <span class="chord-chip">{chord}</span>
-                {/each}
-            </div>
-            <p class="original-key">
-                Original Key: {originalKey}
+            <div class="original-key-row">
+                <span class="original-key-text">Original Key: {originalKey}</span>
+                <span class="original-key-sep">|</span>
                 <button class="btn-link" onclick={revertTranspose} disabled={transposeOffset === 0}>Revert</button>
-            </p>
+            </div>
         </div>
-
-        <hr />
 
         {#if chordList.length > 0}
         <div class="keyboards">
-            <h3>Mini-Keyboards</h3>
-            <KeyboardGrid chordList={transposeOffset === 0 ? chordList : liveChordProgression} />
+            <KeyboardGrid chordList={liveChordProgression} />
         </div>
         <hr />
         {/if}
 
         {#if editingSongId}
         <div class="delete-section">
-            <button class="btn-danger" onclick={requestDelete}>Delete Chord</button>
+            <button class="btn-danger" onclick={requestDelete}>Delete Chord Sheet</button>
         </div>
 
         <hr />
@@ -584,10 +698,10 @@
 
         <div class="import-export">
             <h3>Import & Export Chord Library</h3>
-            <p>Save all your chord sheets as a backup, or import to another device.</p>
+            <p>Save all chord sheets to share between devices</p>
             <div class="buttons">
-                <button onclick={handleExport}>Export</button>
-                <button onclick={triggerImport}>Import</button>
+                <button class="toolbar-btn-style" onclick={handleExport}>Export</button>
+                <button class="toolbar-btn-style" onclick={triggerImport}>Import</button>
                 <input
                     type="file"
                     accept="application/json"
@@ -605,8 +719,11 @@
 	{#if showUnsavedModal}
 	<div class="modal">
 		<div class="modal-content">
-			<p>Tap Chord It to save your changes, or Cancel to exit without saving.</p>
-			<button class="primary" onclick={cancelClose}>Got It</button>
+			<p>You have unsaved changes that will be lost.</p>
+			<div class="modal-actions">
+				<button onclick={cancelClose}>Keep editing</button>
+				<button class="primary" onclick={confirmClose}>Close</button>
+			</div>
 		</div>
 	</div>
 	{/if}
@@ -628,18 +745,36 @@
 	.header {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		padding: var(--space-md);
-		border-bottom: 1px solid var(--color-border);
 	}
-	.header h2 {
-		margin: 0;
-		margin-left: var(--space-md);
+	.btn-pill {
+		height: 36px;
+		padding: 0 var(--space-md);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: var(--text-secondary);
+		font-weight: 600;
+		font-size: var(--text-sm, 0.9em);
+		cursor: pointer;
+	}
+	.btn-pill-save {
+		color: var(--text-secondary);
+		border-color: var(--color-border);
+	}
+	.btn-pill-save.active {
+		color: var(--accent-brand);
+		border-color: var(--accent-brand);
+	}
+	.btn-pill-save:disabled {
+		cursor: default;
 	}
 	.content {
 		padding: var(--space-md);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-md);
+	       display: flex;
+	       flex-direction: column;
+	       gap: var(--space-md);
 	}
     .form-group {
         display: flex;
@@ -652,6 +787,9 @@
         border-radius: var(--radius-sm);
         font-family: inherit;
         font-size: var(--text-base);
+    }
+    .form-group input {
+        height: 44px;
     }
     .helper {
         font-size: 0.9em;
@@ -676,48 +814,110 @@
         gap: var(--space-xs);
         flex-wrap: wrap;
     }
-    .toolbar .undo-redo {
-        font-size: 1.1em;
+    .toolbar-btn {
+        height: 36px;
+        min-width: 44px;
+        padding: 0 var(--space-sm);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        background: var(--bg-main);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #cccccc;
+        cursor: not-allowed;
+    }
+    .toolbar-btn:not(:disabled) {
+        color: #777777;
+        cursor: pointer;
+    }
+    .toolbar-btn:not(:disabled):hover {
+        border-color: #777777;
+    }
+    .toolbar-btn:disabled {
+        opacity: 1;
+    }
+    .toolbar-btn-style {
+        height: 36px;
+        padding: 0 var(--space-sm);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--color-border);
+        background: var(--bg-main);
+        color: #777777;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .toolbar-btn-style:hover {
+        border-color: #777777;
+    }
+    .textarea-wrapper {
+        position: relative;
+        width: 100%;
     }
     .canvas {
-        min-height: 200px;
-        resize: vertical;
-        font-family: 'Courier New', Courier, monospace;
-        white-space: pre;
+    	width: 100%;
+    	min-height: 200px;
+    	resize: vertical;
+    	font-family: var(--font-family);
+    	white-space: pre;
+    	background: var(--bg-main);
     }
-	.preview-canvas {
-		min-height: 200px;
-		background: var(--bg-surface);
-		padding: var(--space-sm);
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
-		font-family: 'Courier New', Courier, monospace;
-		overflow-x: auto;
-	}
-	.empty-preview {
-		color: var(--text-secondary);
-		margin: 0;
-	}
-	.preview-line {
-		margin-bottom: var(--space-sm);
-		white-space: pre;
-	}
-	.preview-line-blank {
-		height: 1em;
-	}
-	.chord-row {
-		color: var(--accent-brand);
-		font-weight: 700;
-		margin-bottom: 2px;
-		white-space: pre;
-		line-height: 1.2;
-	}
-	.lyric-row {
-		white-space: pre;
-		line-height: 1.3;
-	}
+    .placeholder-helper {
+        position: absolute;
+        top: var(--space-sm);
+        left: var(--space-sm);
+        pointer-events: none;
+        color: var(--text-secondary);
+        font-size: 0.9em;
+        line-height: 1.5;
+    }
+    .placeholder-helper p {
+        margin: 0 0 var(--space-xs) 0;
+    }
+    .placeholder-helper a {
+        color: var(--text-secondary);
+        text-decoration: underline;
+        pointer-events: auto;
+    }
+    .preview-canvas {
+    	min-height: 200px;
+    	background: var(--bg-surface);
+    	padding: var(--space-sm);
+    	border-radius: var(--radius-sm);
+    	border: 1px solid var(--color-border);
+    	font-family: var(--font-family);
+    	overflow-x: auto;
+    }
+    .empty-preview {
+    	color: var(--text-secondary);
+    	margin: 0;
+    }
+    .preview-line {
+    	display: flex;
+    	flex-direction: column;
+    	margin-bottom: var(--space-sm);
+    }
+    .preview-line-blank {
+    	height: 1em;
+    }
+    .chord-row {
+    	color: var(--accent-brand);
+    	font-weight: 700;
+    	margin-bottom: 2px;
+    	white-space: pre;
+    	line-height: 1.2;
+    }
+    .lyric-row {
+    	font-weight: 400;
+    	white-space: pre;
+    	line-height: 1.3;
+    }
     .actions {
         display: flex;
+        align-items: center;
+        justify-content: space-between;
         gap: var(--space-md);
     }
     .primary {
@@ -728,53 +928,164 @@
         border-radius: var(--radius-sm);
         cursor: pointer;
     }
+    .btn-pill-primary {
+        background-color: var(--accent-brand);
+        color: white;
+        border-color: var(--accent-brand);
+    }
+    .edit-preview-toggle {
+        display: flex;
+        height: 36px;
+        border: 1px solid var(--accent-brand);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        margin-left: auto;
+    }
+    .edit-preview-toggle.disabled {
+        border-color: var(--color-border);
+    }
+    .toggle-segment {
+        height: 100%;
+        padding: 0 var(--space-md);
+        border: none;
+        background: var(--bg-main);
+        color: var(--accent-brand);
+        font-weight: 600;
+        font-size: var(--text-sm, 0.9em);
+        cursor: pointer;
+    }
+    .toggle-segment.active {
+        background: var(--accent-brand);
+        color: white;
+        cursor: default;
+    }
+    .edit-preview-toggle.disabled .toggle-segment {
+        color: var(--text-secondary);
+        background: var(--bg-main);
+        cursor: not-allowed;
+    }
+    .edit-preview-toggle.disabled .toggle-segment.active {
+        background: var(--color-border);
+        color: var(--text-secondary);
+    }
     button:disabled {
         opacity: 0.4;
         cursor: not-allowed;
+    }
+    .delete-section {
+        display: flex;
+        justify-content: center;
     }
     .btn-danger {
         color: var(--color-danger, #d9383a);
         background: none;
         border: none;
         cursor: pointer;
-        font-weight: bold;
+        font-weight: 400;
+        font-size: var(--text-base);
     }
     .transpose {
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: var(--space-sm);
-        text-align: center;
     }
-    .transpose .controls {
+    .transpose-heading {
+        font-size: var(--text-h3);
+        font-weight: 400;
+        color: var(--text-primary);
+        text-align: left;
+    }
+    .transpose-row {
+        display: flex;
+        align-items: stretch;
+        gap: var(--space-sm);
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .key-selector {
+        flex: 1 1 auto;
+        min-width: 140px;
+        display: flex;
+        align-items: stretch;
+        height: 36px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--bg-main);
+        overflow: hidden;
+    }
+    .chevron-btn {
         display: flex;
         align-items: center;
-        gap: var(--space-md);
+        justify-content: center;
+        width: 36px;
+        flex: 0 0 36px;
+        height: 100%;
+        background: #777777;
+        color: #ffffff;
+        border-radius: 0;
     }
-    .transpose .key-label {
-        font-size: var(--text-h2);
+    .chevron-btn:hover {
+        background: #666666;
+    }
+    .key-display {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0 var(--space-sm);
+        background: var(--bg-surface);
+        color: var(--accent-brand);
         font-weight: 700;
-        min-width: 60px;
+        font-size: var(--text-h3);
+        white-space: nowrap;
+    }
+    .key-divider {
+        flex: 0 0 1px;
+        width: 1px;
+        background: var(--color-border);
+    }
+    .key-steps {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0 var(--space-sm);
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        font-size: var(--text-sm, 0.9em);
+        white-space: nowrap;
     }
     .chord-progression {
         display: flex;
         flex-wrap: wrap;
+        align-content: stretch;
         gap: var(--space-xs);
-        justify-content: center;
+        flex: 0 0 auto;
     }
     .chord-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        box-sizing: border-box;
         background: var(--bg-surface);
         border: 1px solid var(--color-border);
         border-radius: var(--radius-sm);
-        padding: var(--space-xs) var(--space-sm);
+        padding: 0 var(--space-sm);
         font-weight: 600;
     }
-    .original-key {
-        margin: 0;
-        color: var(--text-secondary);
+    .original-key-row {
         display: flex;
+        justify-content: flex-end;
         align-items: center;
-        gap: var(--space-sm);
+        gap: var(--space-xs);
+        color: var(--text-secondary);
+        font-size: var(--text-sm, 0.9em);
+    }
+    .original-key-sep {
+        color: var(--color-border);
     }
     .btn-link {
         color: var(--accent-brand);
@@ -783,6 +1094,7 @@
         cursor: pointer;
         text-decoration: underline;
         padding: 0;
+        font-size: inherit;
     }
     .keyboards h3 {
         text-align: center;
@@ -790,6 +1102,9 @@
     .import-export .buttons {
         display: flex;
         gap: var(--space-md);
+    }
+    .import-export .buttons .toolbar-btn-style {
+        flex: 1 1 0;
     }
     .import-message {
         font-size: 0.9em;

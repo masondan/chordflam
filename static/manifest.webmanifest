@@ -1,7 +1,7 @@
 {
 	"name": "ChordFlam",
 	"short_name": "ChordFlam",
-	"description": "A piano chord-sheet archive with transpose and mini-keyboard diagrams.",
+	"description": "A piano chord sheet creator and library.",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",

@@ -34,6 +34,7 @@
 	// default each time Chord Reader opens.
 	let showKeyboards = $state(true);
 	let showColourMenu = $state(false);
+	let colourPickerEl: HTMLDivElement | undefined = $state();
 
 	// Mirrors the load-guard pattern in ChordActions: only (re)load when the
 	// drawer actually opens or the song being viewed changes, never on every render.
@@ -98,24 +99,37 @@
 		showColourMenu = false;
 		persistDisplay();
 	}
+
+	function handleWindowClick(e: MouseEvent) {
+		if (!showColourMenu) return;
+		if (colourPickerEl && !colourPickerEl.contains(e.target as Node)) {
+			showColourMenu = false;
+		}
+	}
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <Drawer {isOpen}>
 	<div class="header">
-		<button class="btn-icon back-link" onclick={onClose}>&lt; Back</button>
+		<button class="btn-icon back-link" onclick={onClose}>
+			<Icon name="chevron-left" size={24} />
+			Back to Songs
+		</button>
 	</div>
 
 	{#if song}
 	<div class="content">
 		<div class="title-block">
-			<h1>{song.title}</h1>
+			<h1 class="song-title">{song.title}</h1>
 			{#if song.artist}
 				<p class="artist">{song.artist}</p>
 			{/if}
 			<p class="keys">
-				Current Key: <strong>{song.currentKey}</strong>
 				{#if song.originalKey}
-					&nbsp;|&nbsp; Original Key: <strong>{song.originalKey}</strong>
+					Original Key: <strong>{song.originalKey}</strong> | Current: <strong>{song.currentKey}</strong>
+				{:else}
+					Current Key: <strong>{song.currentKey}</strong>
 				{/if}
 			</p>
 			{#if song.chordList.length > 0}
@@ -126,18 +140,29 @@
 		</div>
 
 		<div class="toolbar">
-			<button class="btn-icon" onclick={toggleKeyboards} aria-label={showKeyboards ? 'Hide keyboards' : 'Show keyboards'}>
+			<button class="icon-box" onclick={toggleKeyboards} aria-label={showKeyboards ? 'Hide keyboards' : 'Show keyboards'}>
 				<Icon name={showKeyboards ? 'piano-on' : 'piano-off'} size={22} />
 			</button>
-			<button class="btn-icon" onclick={decreaseFontSize} aria-label="Smaller text" disabled={fontSize <= FONT_MIN}>
-				<Icon name="text-decrease" size={22} />
-			</button>
-			<button class="btn-icon" onclick={increaseFontSize} aria-label="Larger text" disabled={fontSize >= FONT_MAX}>
-				<Icon name="text-increase" size={22} />
-			</button>
-			<div class="colour-picker">
-				<button class="btn-icon colour-swatch-btn" onclick={toggleColourMenu} aria-label="Chord colour">
+
+			<div class="rocker">
+				<button onclick={decreaseFontSize} aria-label="Smaller text" disabled={fontSize <= FONT_MIN}>
+					<Icon name="text-decrease" size={20} />
+				</button>
+				<span class="rocker-divider"></span>
+				<button onclick={increaseFontSize} aria-label="Larger text" disabled={fontSize >= FONT_MAX}>
+					<Icon name="text-increase" size={20} />
+				</button>
+			</div>
+
+			<div class="colour-picker" bind:this={colourPickerEl}>
+				<button
+					class="icon-box colour-select"
+					onclick={toggleColourMenu}
+					aria-label="Chord colour"
+					aria-expanded={showColourMenu}
+				>
 					<span class="colour-swatch" style="background-color:{chordColour}"></span>
+					<Icon name={showColourMenu ? 'chevron-up' : 'chevron-down'} size={16} />
 				</button>
 				{#if showColourMenu}
 				<div class="colour-menu">
@@ -145,17 +170,18 @@
 						<button
 							class="colour-option"
 							class:active={preset.value === chordColour}
+							aria-label={preset.name}
 							onclick={() => selectColour(preset.value)}
 						>
 							<span class="colour-swatch" style="background-color:{preset.value}"></span>
-							{preset.name}
 						</button>
 					{/each}
 				</div>
 				{/if}
 			</div>
-			<button class="btn-icon" onclick={onEdit} aria-label="Edit">
-				<Icon name="edit-fill" size={22} />
+
+			<button class="icon-box" onclick={onEdit} aria-label="Edit">
+				<Icon name="edit" size={22} />
 			</button>
 		</div>
 
@@ -191,10 +217,14 @@
 		display: flex;
 		align-items: center;
 		padding: var(--space-md);
-		border-bottom: 1px solid var(--color-border);
+		justify-content: flex-start;
 	}
 	.back-link {
 		font-weight: 600;
+		font-size: var(--text-h3);
+		padding: var(--space-sm) 0 var(--space-sm) 0;
+		margin-left: calc(var(--space-sm) * -1);
+		gap: var(--space-xs);
 	}
 	.content {
 		padding: var(--space-md);
@@ -203,35 +233,92 @@
 		gap: var(--space-md);
 	}
 	.title-block h1 {
+		margin-bottom: 0;
+	}
+	.song-title {
+		text-align: center;
+		font-size: var(--text-h1);
+		color: var(--accent-brand);
 		margin-bottom: var(--space-xs);
 	}
 	.artist {
+		text-align: center;
 		margin: 0 0 var(--space-xs) 0;
 		color: var(--text-secondary);
+		font-size: var(--text-sm);
 	}
 	.keys {
+		text-align: center;
 		margin: 0 0 var(--space-xs) 0;
 		color: var(--text-secondary);
+		font-size: var(--text-sm);
 	}
 	.chords-line {
+		text-align: center;
 		margin: 0;
 		font-weight: 600;
+		font-size: var(--text-sm);
 	}
 	.toolbar {
 		display: flex;
 		align-items: center;
-		gap: var(--space-xs);
+		justify-content: center;
+		gap: var(--space-sm);
 		flex-wrap: wrap;
-		border-top: 1px solid var(--color-border);
-		border-bottom: 1px solid var(--color-border);
 		padding: var(--space-sm) 0;
 	}
 	.toolbar button:disabled {
 		opacity: 0.3;
 		cursor: not-allowed;
 	}
+	.icon-box {
+		flex-shrink: 0;
+		width: 44px;
+		height: 44px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--bg-main);
+		color: var(--text-primary);
+	}
+	.icon-box:hover {
+		border-color: var(--color-border-active, var(--text-secondary));
+	}
+	.rocker {
+		flex-shrink: 0;
+		display: flex;
+		align-items: stretch;
+		height: 44px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--bg-main);
+		overflow: hidden;
+	}
+	.rocker button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 100%;
+		color: var(--text-primary);
+		border-radius: 0;
+	}
+	.rocker button:hover {
+		background: var(--bg-surface);
+	}
+	.rocker-divider {
+		width: 1px;
+		background: var(--color-border);
+	}
 	.colour-picker {
 		position: relative;
+	}
+	.colour-select {
+		width: auto;
+		gap: var(--space-xs);
+		padding: 0 var(--space-sm);
 	}
 	.colour-swatch {
 		display: inline-block;
@@ -242,27 +329,26 @@
 	}
 	.colour-menu {
 		position: absolute;
-		top: 100%;
-		left: 0;
+		top: calc(100% + var(--space-xs));
+		left: 50%;
+		transform: translateX(-50%);
 		z-index: var(--z-menu);
 		background: var(--bg-main);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-md);
-		padding: var(--space-xs);
+		padding: var(--space-sm);
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
-		min-width: 160px;
+		align-items: center;
+		gap: var(--space-sm);
 	}
 	.colour-option {
 		display: flex;
 		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-xs) var(--space-sm);
-		border-radius: var(--radius-sm);
-		text-align: left;
-		white-space: nowrap;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: var(--radius-full);
 	}
 	.colour-option:hover,
 	.colour-option.active {
@@ -272,11 +358,11 @@
 		padding: var(--space-sm) 0;
 	}
 	.chord-sheet {
-		font-family: 'Courier New', Courier, monospace;
+		font-family: var(--font-family);
 	}
 	.sheet-line {
-		margin-bottom: var(--space-sm);
-		white-space: pre-wrap;
+		display: flex;
+		flex-direction: column;
 	}
 	.sheet-line-blank {
 		height: 1em;
@@ -284,13 +370,13 @@
 	.chord-row {
 		color: var(--chord-colour, var(--accent-brand));
 		font-weight: 700;
-		margin-bottom: 2px;
 		white-space: pre;
-		line-height: 1.2;
+		line-height: 1;
 	}
 	.lyric-row {
+		font-weight: 400;
 		white-space: pre-wrap;
-		line-height: 1.3;
+		line-height: 1;
 	}
 	.empty {
 		color: var(--text-secondary);

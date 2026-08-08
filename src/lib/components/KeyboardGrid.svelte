@@ -58,17 +58,16 @@
 		align-items: center;
 		gap: var(--space-sm);
 	}
+	/* Fixed 2-column grid, no wider breakpoint. This is a mobile-first app
+	   capped at --app-max-width (480px) even on desktop, so there's no need
+	   (or room) for a 4-column layout — that previously caused fixed-width
+	   SVG diagrams to overflow the container on desktop. */
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
 		gap: var(--space-md);
 		width: 100%;
 		justify-content: center;
-	}
-	@media (min-width: 768px) {
-		.grid {
-			grid-template-columns: repeat(4, 1fr);
-		}
 	}
 	.pager {
 		display: flex;
