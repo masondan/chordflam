@@ -358,7 +358,7 @@
 		padding: var(--space-sm) 0;
 	}
 	.chord-sheet {
-		font-family: var(--font-family);
+		font-family: var(--font-family-mono);
 	}
 	.sheet-line {
 		display: flex;
@@ -372,11 +372,13 @@
 		font-weight: 700;
 		white-space: pre;
 		line-height: 1;
+		font-family: var(--font-family-mono);
 	}
 	.lyric-row {
 		font-weight: 400;
 		white-space: pre-wrap;
 		line-height: 1;
+		font-family: var(--font-family-mono);
 	}
 	.empty {
 		color: var(--text-secondary);

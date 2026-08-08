@@ -862,7 +862,7 @@
     	width: 100%;
     	min-height: 200px;
     	resize: vertical;
-    	font-family: var(--font-family);
+    	font-family: var(--font-family-mono);
     	white-space: pre;
     	background: var(--bg-main);
     }
@@ -889,7 +889,7 @@
     	padding: var(--space-sm);
     	border-radius: var(--radius-sm);
     	border: 1px solid var(--color-border);
-    	font-family: var(--font-family);
+    	font-family: var(--font-family-mono);
     	overflow-x: auto;
     }
     .empty-preview {
@@ -910,11 +910,13 @@
     	margin-bottom: 2px;
     	white-space: pre;
     	line-height: 1.2;
+    	font-family: var(--font-family-mono);
     }
     .lyric-row {
     	font-weight: 400;
     	white-space: pre;
     	line-height: 1.3;
+    	font-family: var(--font-family-mono);
     }
     .actions {
         display: flex;
