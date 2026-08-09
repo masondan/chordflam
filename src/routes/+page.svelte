@@ -438,7 +438,7 @@
 	.actions {
 		display: flex;
 		align-items: center;
-		gap: var(--space-sm);
+		gap: var(--space-md);
 		flex-shrink: 0;
 		padding-top: 1px;
 	}
