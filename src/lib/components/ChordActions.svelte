@@ -61,6 +61,7 @@
 
 	let showUnsavedModal = $state(false);
 	let showDeleteModal = $state(false);
+	let showTitleRequiredModal = $state(false);
 
 	// Import/export
 	let importFileInput: HTMLInputElement | undefined = $state();
@@ -240,6 +241,10 @@
 
 	async function saveAndClose() {
 		if (!hasEverBeenModified) return;
+		if (!title.trim()) {
+			showTitleRequiredModal = true;
+			return;
+		}
 		if (dirty) {
 			// There's uncommitted work (edits and/or a pending transpose preview
 			// that Chord It hasn't baked in yet) — commit it via the normal
@@ -493,6 +498,10 @@
 		showDeleteModal = false;
 	}
 
+	function dismissTitleRequiredModal() {
+		showTitleRequiredModal = false;
+	}
+
 	// --- Import / Export (§5.11) ---
 
 	async function handleExport() {
@@ -545,12 +554,12 @@
 	</div>
 	<div class="content">
         <div class="form-group">
-            <label for="title">Title</label>
-            <input type="text" id="title" bind:value={title} placeholder="Song Title" />
+            <label for="title">Song Title <span class="input-hint">(Required)</span></label>
+            <input type="text" id="title" bind:value={title} />
         </div>
         <div class="form-group">
-            <label for="artist">Artist</label>
-            <input type="text" id="artist" bind:value={artist} placeholder="Artist Name" />
+            <label for="artist">Artist Name <span class="input-hint">(Optional)</span></label>
+            <input type="text" id="artist" bind:value={artist} />
         </div>
 
         {#if parseError}
@@ -769,6 +778,18 @@
 		</div>
 	</div>
 	{/if}
+
+	{#if showTitleRequiredModal}
+	<div class="modal-overlay">
+		<div class="delete-modal-content">
+			<p>Add a Song Title before saving</p>
+			<div class="delete-modal-actions">
+				<button class="btn-modal" onclick={dismissTitleRequiredModal}>Cancel</button>
+				<button class="btn-modal" onclick={dismissTitleRequiredModal}>Got it</button>
+			</div>
+		</div>
+	</div>
+	{/if}
 </Drawer>
 
 <style>
@@ -824,6 +845,10 @@
     .helper {
         font-size: 0.9em;
         color: var(--text-secondary);
+    }
+    .input-hint {
+        color: #aaaaaa;
+        font-weight: 400;
     }
     .parse-error {
         background: #fdecea;
