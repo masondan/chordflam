@@ -585,7 +585,7 @@
             <input type="text" id="title" bind:value={title} />
         </div>
         <div class="form-group">
-            <label for="artist">Artist Name <span class="input-hint">(Optional)</span></label>
+            <label for="artist">Artist/Info <span class="input-hint">(Optional)</span></label>
             <input type="text" id="artist" bind:value={artist} />
         </div>
 
