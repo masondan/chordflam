@@ -62,6 +62,8 @@
 	let showUnsavedModal = $state(false);
 	let showDeleteModal = $state(false);
 	let showTitleRequiredModal = $state(false);
+	let showFixKeyModal = $state(false);
+	let fixKeyInput = $state('');
 
 	// Import/export
 	let importFileInput: HTMLInputElement | undefined = $state();
@@ -504,6 +506,29 @@
 		showTitleRequiredModal = false;
 	}
 
+	function openFixKeyModal() {
+		fixKeyInput = originalKey;
+		showFixKeyModal = true;
+	}
+
+	function cancelFixKey() {
+		showFixKeyModal = false;
+		fixKeyInput = '';
+	}
+
+	async function confirmFixKey() {
+		const newKey = fixKeyInput.trim().toUpperCase();
+		if (!newKey) {
+			cancelFixKey();
+			return;
+		}
+		originalKey = newKey;
+		showFixKeyModal = false;
+		fixKeyInput = '';
+		// Mark as modified so Save & Close stays active
+		hasEverBeenModified = true;
+	}
+
 	// --- Import / Export (§5.11) ---
 
 	async function handleExport() {
@@ -719,6 +744,8 @@
                 <span class="original-key-text">Original Key: {originalKey}</span>
                 <span class="original-key-sep">|</span>
                 <button class="btn-link" onclick={revertTranspose} disabled={transposeOffset === 0}>Revert</button>
+                <span class="original-key-sep">|</span>
+                <button class="btn-link" onclick={openFixKeyModal} disabled={!hasParsedOnce}>Fix</button>
             </div>
         </div>
 
@@ -788,6 +815,25 @@
 			<div class="delete-modal-actions">
 				<button class="btn-modal" onclick={dismissTitleRequiredModal}>Cancel</button>
 				<button class="btn-modal" onclick={dismissTitleRequiredModal}>Got it</button>
+			</div>
+		</div>
+	</div>
+	{/if}
+
+	{#if showFixKeyModal}
+	<div class="modal-overlay">
+		<div class="delete-modal-content">
+			<p>If ChordFlam made a mistake, add the correct key for this song. It won't change the chord sheet.</p>
+			<input
+				type="text"
+				class="fix-key-input"
+				bind:value={fixKeyInput}
+				placeholder="e.g., C, D, Em, F#m"
+				maxlength="4"
+			/>
+			<div class="delete-modal-actions">
+				<button class="btn-modal" onclick={cancelFixKey}>Cancel</button>
+				<button class="btn-modal" onclick={confirmFixKey}>Change Key</button>
 			</div>
 		</div>
 	</div>
@@ -1275,5 +1321,15 @@
 		border-color: #d9383a;
 		background: #d9383a;
 		color: #ffffff;
+	}
+	.fix-key-input {
+		width: 100%;
+		padding: var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-family: inherit;
+		font-size: var(--text-base);
+		box-sizing: border-box;
+		margin-bottom: var(--space-lg);
 	}
 </style>
