@@ -630,10 +630,12 @@
             ></textarea>
             {#if !rawText}
             <div class="placeholder-helper">
-                <p>Paste or create a chord sheet</p>
-                <p>Sources: <a href="https://www.ultimate-guitar.com" target="_blank">Ultimate Guitar</a>, <a href="https://chordu.com" target="_blank">Chordu</a>, <a href="https://www.e-chords.com" target="_blank">E-Chords</a></p>
+                <p>Paste or create a chord chart here</p>
                 <p>Add manual chords in this format:</p>
                 <p>Let it [Am]be, Let it [G]be</p>
+            </div>
+            <div class="placeholder-sources">
+                Sources: <a href="https://www.ultimate-guitar.com" target="_blank">Ultimate Guitar</a>, <a href="https://chordu.com" target="_blank">Chordu</a>, <a href="https://www.e-chords.com" target="_blank">E-Chords</a>
             </div>
             {/if}
         </div>
@@ -906,6 +908,21 @@
     }
     .placeholder-helper a {
         color: var(--text-secondary);
+        text-decoration: underline;
+        pointer-events: auto;
+    }
+    .placeholder-sources {
+        position: absolute;
+        bottom: var(--space-md);
+        left: var(--space-sm);
+        right: var(--space-sm);
+        pointer-events: none;
+        color: #aaaaaa;
+        font-size: 0.85em;
+        line-height: 1.4;
+    }
+    .placeholder-sources a {
+        color: #aaaaaa;
         text-decoration: underline;
         pointer-events: auto;
     }
