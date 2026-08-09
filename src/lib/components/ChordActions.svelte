@@ -277,6 +277,8 @@
 	}
 
 	async function chordIt() {
+		if (!dirty) return;
+
 		const previousChordList = chordList;
 		const hadKeyBefore = hasParsedOnce;
 
@@ -656,7 +658,7 @@
         {/if}
 
         <div class="actions">
-            <button class="btn-pill btn-pill-primary" onclick={chordIt}>Chord It</button>
+            <button class="btn-pill btn-pill-primary" disabled={!dirty} onclick={chordIt}>Chord It</button>
             <div class="edit-preview-toggle" class:disabled={!hasContent}>
                 <button
                     type="button"
@@ -961,6 +963,13 @@
         color: white;
         border-color: var(--accent-brand);
     }
+    .btn-pill-primary:disabled {
+        background-color: var(--color-border);
+        border-color: var(--color-border);
+        color: var(--text-secondary);
+        opacity: 1;
+        cursor: not-allowed;
+    }
     .edit-preview-toggle {
         display: flex;
         height: 36px;
@@ -1139,6 +1148,17 @@
     }
     .import-export .buttons .toolbar-btn-style {
         flex: 1 1 0;
+    }
+    .import-export h3 {
+        margin: 0 0 var(--space-xs) 0;
+        font-size: var(--text-h3);
+        font-weight: 400;
+        color: var(--text-primary);
+    }
+    .import-export > p {
+        font-size: var(--text-sm, 0.9em);
+        color: var(--text-secondary);
+        margin: 0 0 var(--space-md) 0;
     }
     .import-message {
         font-size: 0.9em;
