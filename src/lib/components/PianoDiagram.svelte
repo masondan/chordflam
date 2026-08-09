@@ -3,17 +3,18 @@
 
 	let { chordName }: { chordName: string } = $props();
 
-	// Fixed reference keyboard (§6.2) — roughly one octave plus a few keys
-	// either side (~10 white keys), matching the UG reference diagram. The
-	// keyboard itself never shifts per-chord; only the dots move. It always
+	// Fixed reference keyboard (§6.2) — two full octaves (14 white keys, C→B).
+	// The keyboard itself never shifts per-chord; only the dots move. It always
 	// starts at C so every pitch class (0–11) is guaranteed to appear within
-	// the first 7 white keys' worth of white+black keys — the trailing keys
-	// are just visual padding, matching the reference's proportions.
-	const WHITE_KEY_COUNT = 10;
-	const WHITE_KEY_WIDTH = 18;
-	const WHITE_KEY_HEIGHT = 64;
-	const BLACK_KEY_WIDTH = 11;
-	const BLACK_KEY_HEIGHT = 40;
+	// the first 7 white keys' worth of white+black keys. Extended to 14 keys to
+	// accommodate all triads + 7ths without dropping notes (e.g. B major's F#).
+	// Width slightly reduced per key to fit 14 within reasonable space; height
+	// shrinks proportionally to keep the diagram compact and focus on dots.
+	const WHITE_KEY_COUNT = 14;
+	const WHITE_KEY_WIDTH = 16;
+	const WHITE_KEY_HEIGHT = 56;
+	const BLACK_KEY_WIDTH = 10;
+	const BLACK_KEY_HEIGHT = 35;
 	const WHITE_CORNER_RADIUS = 3;
 	const BLACK_CORNER_RADIUS = 2;
 	const WHITE_PITCH_CLASSES = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
