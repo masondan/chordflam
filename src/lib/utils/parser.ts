@@ -41,7 +41,7 @@ export function normalizeToBracketNotation(rawText: string): string {
   // A very basic heuristic for a chord line:
   // - Mostly spaces, and short words that look like chords (e.g. C, Am, G7, F#m, Bb)
   // - Doesn't contain regular words.
-  const chordLineRegex = /^(\s*[A-G](?:#|b)?(?:m|maj|min|aug|dim|sus|add|\d)*\s*)+$/;
+  const chordLineRegex = /^(\s*[A-G](?:#|b)?(?:m|maj|min|aug|dim|sus|add|\d)*(?:\/[A-G](?:#|b)?)?\s*)+$/;
 
   for (let i = 0; i < lines.length; i++) {
     const currentLine = lines[i];

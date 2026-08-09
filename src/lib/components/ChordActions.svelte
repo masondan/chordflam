@@ -1237,7 +1237,7 @@
 	.btn-modal {
 		flex: 1;
 		padding: var(--space-sm) var(--space-md);
-		border-radius: var(--radius-full);
+		border-radius: var(--radius-md);
 		border: 1px solid var(--color-border);
 		background: var(--bg-main);
 		color: var(--text-primary);
