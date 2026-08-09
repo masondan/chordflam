@@ -2,7 +2,7 @@
 	import Drawer from './Drawer.svelte';
 	import KeyboardGrid from './KeyboardGrid.svelte';
 	import Icon from './icons/Icon.svelte';
-	import { parseSong, formatParsedLineForDisplay } from '$lib/utils/parser';
+	import { parseSong, formatParsedLineForDisplay, extractChordOccurrences } from '$lib/utils/parser';
 	import { transposeRawText, transposeChord, semitoneDistance } from '$lib/utils/transpose';
 	import { detectKey, isMajorEdit } from '$lib/utils/keyDetection';
 	import {
@@ -302,11 +302,13 @@
 		}
 
 		// --- Key detection / preservation (§5.5) ---
+		// detectKey needs every chord *occurrence* (with repeats), not the
+		// deduplicated chordList, since frequency is its primary signal.
 		if (!hadKeyBefore) {
 			// First-ever parse for this song (new song, or first Chord It on an
 			// import that had no key yet): detect fresh. originalKey is brand new,
 			// so any prior transpose dialling is meaningless — reset to 0.
-			originalKey = detectKey(chordList);
+			originalKey = detectKey(extractChordOccurrences(parsedLines));
 			currentKey = originalKey;
 			transposeOffset = 0;
 			appliedOffset = 0;
@@ -315,7 +317,7 @@
 			if (major) {
 				// originalKey is being replaced — any transpose distance from the
 				// *old* original is meaningless now, so reset to 0 as well.
-				originalKey = detectKey(chordList);
+				originalKey = detectKey(extractChordOccurrences(parsedLines));
 				currentKey = originalKey;
 				transposeOffset = 0;
 				appliedOffset = 0;

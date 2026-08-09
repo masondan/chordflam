@@ -178,6 +178,24 @@ export function formatParsedLineForDisplay(line: ParsedLine): { chordRow: string
 }
 
 /**
+ * Walks parsedLines and returns every chord *occurrence* in the song, in
+ * reading order, with repeats — as opposed to `chordList`, which is
+ * deduplicated to first-appearance order. Key detection needs the repeats:
+ * a chord played 20 times must outweigh one played once (see keyDetection.ts).
+ */
+export function extractChordOccurrences(parsedLines: ParsedLine[]): string[] {
+  const occurrences: string[] = [];
+  for (const line of parsedLines) {
+    for (const seg of line.segments) {
+      if (seg.chord) {
+        occurrences.push(seg.chord);
+      }
+    }
+  }
+  return occurrences;
+}
+
+/**
  * Parses bracket notation raw text into structured ParsedLine array and a unique chord list.
  * Also returns the normalised bracket-notation text so callers can persist it back as the
  * canonical `rawText` — per the plan, rawText IS bracket notation, so a raw chords-over-lyrics

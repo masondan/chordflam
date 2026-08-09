@@ -42,9 +42,17 @@ console.log('transpose C by +2:', transposeChord('C', 2)); // D
 console.log('transpose Cmaj7/E by -2:', transposeChord('Cmaj7/E', -2)); // Bbmaj7/D
 console.log('transposeRawText +2:', transposeRawText('[Am]Twinkle [C]twinkle', 2)); // [Bm]Twinkle [D]twinkle
 
-console.log('\n--- TEST KEY DETECTION ---');
-console.log('Key of [C, G, Am, F]:', detectKey(['C', 'G', 'Am', 'F'])); // C != F -> F? Wait, if it resolves to C, first chord C is better. Our heuristic returns last chord if different. Let's see.
-console.log('Key of [Am, F, C, Am]:', detectKey(['Am', 'F', 'C', 'Am'])); // Am
+console.log('\n--- TEST KEY DETECTION (diatonic-set scoring) ---');
+console.log('Key of [C, G, Am, F]:', detectKey(['C', 'G', 'Am', 'F'])); // C (all 4 diatonic, C is the I chord)
+console.log('Key of [Am, F, C, Am, Am, Am]:', detectKey(['Am', 'F', 'C', 'Am', 'Am', 'Am'])); // Am (vi-heavy, opens+dominates on Am)
+console.log(
+  'Dream (bug repro) C,Am,F,G x many + one D:',
+  detectKey([
+    'C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G',
+    'C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G', 'C', 'Am',
+    'F', 'Em', 'Dm', 'G', 'C', 'F', 'Em', 'D', 'G'
+  ])
+); // expect C (D is a single passing chord, C/Am/F/G dominate)
 
 console.log('\n--- TEST EDIT DETECTION ---');
 console.log('Minor edit:', isMajorEdit(['C', 'G', 'Am'], ['C', 'G', 'Am', 'F'])); // false (<= 1 diff)
