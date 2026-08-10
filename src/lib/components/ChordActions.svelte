@@ -557,6 +557,9 @@
 			const text = await file.text();
 			await importLibrary(text);
 			importMessage = 'Import successful.';
+			// Close the drawer after a brief delay so the user sees the success message,
+			// which triggers onClose in the parent and refreshes the song library.
+			setTimeout(() => onClose(), 1500);
 		} catch (err) {
 			console.error(err);
 			importMessage = 'Import failed — file may be invalid.';
