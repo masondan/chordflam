@@ -37,17 +37,27 @@ See plan §3 for the full `Song` / `AppSettings` interfaces. Don't add fields wi
 
 Full palette/type/spacing/shadow scale in plan §0 (PromptFlam-derived). Six chord colour presets are fixed — don't invent new ones.
 
-## File structure (chord logic)
+## File structure
 
 ```
 src/lib/
-  components/  PianoDiagram.svelte, KeyboardGrid.svelte
+  components/  ChordActions.svelte, ChordReader.svelte, Drawer.svelte,
+               PianoDiagram.svelte, KeyboardGrid.svelte, Icon.svelte
+               icons/icons.ts  [compiled icon registry]
+  db/          db.ts  [Dexie database, Song/AppSettings interfaces, CRUD ops]
   utils/       parser.ts, transpose.ts, keyDetection.ts, chordToKeys.ts
 ```
 
+**Key files:**
+- [`db.ts`](src/lib/db/db.ts:1): Defines `Song`, `AppSettings`, `ParsedLine`, `ParsedSegment` interfaces. Dexie schema, CRUD functions (saveSong, getSong, deleteSong, toggleFavourite, etc.), settings management.
+- [`parser.ts`](src/lib/utils/parser.ts): Bracket notation → `ParsedLine[]` + `chordList`.
+- [`transpose.ts`](src/lib/utils/transpose.ts): Chord transposition logic.
+- [`keyDetection.ts`](src/lib/utils/keyDetection.ts): Key detection from chord progressions.
+- [`chordToKeys.ts`](src/lib/utils/chordToKeys.ts): Chord → pitch-class → keyboard SVG rendering.
+
 ## Icons
 
-Live in `info/chordflam-icons/`, get moved to `src/assets/` during Phase 0 setup. Full inventory in plan §7.5 — check before requesting/creating a new one.
+Compiled in [`src/lib/components/icons/icons.ts`](src/lib/components/icons/icons.ts:1) as `IconName` type registry. Source originals in `info/chordflam-icons/`. Full inventory in plan §7.5 — check before requesting/creating a new one. Use `<Icon name="add" />` etc. via [`Icon.svelte`](src/lib/components/icons/Icon.svelte).
 
 ## Working process
 
