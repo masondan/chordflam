@@ -145,6 +145,12 @@
 			// local `videoLinks` state and rides along with the next persist().
 		}
 
+		// Video links save independently of the rawText dirty/"Chord It" commit
+		// flow (see AGENTS.md / plan handoff), so `dirty` never reflects this
+		// change. Save & Close must still activate so the user has a clear,
+		// reassuring way to confirm the change and leave the drawer.
+		hasEverBeenModified = true;
+
 		resetVideoInputs();
 	}
 
@@ -155,6 +161,7 @@
 		if (workingSongId) {
 			await deleteVideoLink(workingSongId, id);
 		}
+		hasEverBeenModified = true;
 	}
 
 	function startEditVideoLink(link: VideoLink) {
