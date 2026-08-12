@@ -5,6 +5,7 @@
 	import { parseSong, formatParsedLineForDisplay, extractChordOccurrences } from '$lib/utils/parser';
 	import { transposeRawText, transposeChord, semitoneDistance } from '$lib/utils/transpose';
 	import { detectKey, isMajorEdit } from '$lib/utils/keyDetection';
+	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
 	import {
 		getSong,
 		saveSong,
@@ -13,8 +14,12 @@
 		updateSettings,
 		exportLibrary,
 		importLibrary,
+		addVideoLink,
+		updateVideoLink,
+		deleteVideoLink,
 		type ParsedLine,
-		type Song
+		type Song,
+		type VideoLink
 	} from '$lib/db/db';
 
 	let { isOpen, editingSongId, onClose } = $props<{
@@ -68,6 +73,109 @@
 	// Import/export
 	let importFileInput: HTMLInputElement | undefined = $state();
 	let importMessage = $state('');
+
+	// --- Video Links (see AGENTS.md / plan handoff §Video Links) ---
+	// For an existing (already-saved) song, video links are written to the
+	// DB immediately on add/edit/delete — independent of the rawText
+	// dirty-flag/"Chord It" commit flow, same as toggleFavourite. For a
+	// brand-new, not-yet-saved song (Add mode), there is no row to write to
+	// yet, so links are held here in local state and persisted together
+	// with the song on its first successful save (see persist()).
+	let videoLinks = $state<VideoLink[]>([]);
+	let videoUrlInput = $state('');
+	let videoTitleInput = $state('');
+	let videoUrlValid = $state<boolean | null>(null); // null = empty/untouched, true/false = validated
+	let editingVideoLinkId = $state<string | null>(null); // set when editing an existing entry's title
+	let openVideoPreviewId = $state<string | null>(null); // only one preview open at a time, within Chord Actions
+	let videoSectionOpen = $state(false); // collapsed dropdown by default — see AGENTS.md UI declutter note
+
+	function validateVideoUrl() {
+		if (editingVideoLinkId) return; // URL is fixed/read-only once an entry is being edited
+		const value = videoUrlInput.trim();
+		if (!value) {
+			videoUrlValid = null;
+			return;
+		}
+		try {
+			new URL(value);
+			videoUrlValid = true;
+		} catch {
+			videoUrlValid = false;
+		}
+	}
+
+	// Any edit to the URL text invalidates a prior validation result — the
+	// chevron reverts to its "active, not yet confirmed" state until tapped
+	// again. Also clears the "URL failed" message.
+	function onVideoUrlInput() {
+		if (editingVideoLinkId) return;
+		videoUrlValid = null;
+	}
+
+	function resetVideoInputs() {
+		videoUrlInput = '';
+		videoTitleInput = '';
+		videoUrlValid = null;
+		editingVideoLinkId = null;
+	}
+
+	async function confirmVideoLink() {
+		const title = videoTitleInput.trim();
+		if (!title) return;
+
+		if (editingVideoLinkId) {
+			// Editing an existing entry — URL is fixed, only the title changes.
+			const linkId = editingVideoLinkId;
+			videoLinks = videoLinks.map((l) => (l.id === linkId ? { ...l, title } : l));
+			if (workingSongId) {
+				await updateVideoLink(workingSongId, linkId, { title });
+			}
+		} else {
+			if (videoUrlValid !== true) return;
+			const newLink: VideoLink = {
+				id: crypto.randomUUID(),
+				url: videoUrlInput.trim(),
+				title
+			};
+			videoLinks = [newLink, ...videoLinks];
+			if (workingSongId) {
+				await addVideoLink(workingSongId, newLink);
+			}
+			// If this is a brand-new/unsaved song, newLink simply stays in
+			// local `videoLinks` state and rides along with the next persist().
+		}
+
+		resetVideoInputs();
+	}
+
+	async function deleteVideoLinkRow(id: string) {
+		videoLinks = videoLinks.filter((l) => l.id !== id);
+		if (openVideoPreviewId === id) openVideoPreviewId = null;
+		if (editingVideoLinkId === id) resetVideoInputs();
+		if (workingSongId) {
+			await deleteVideoLink(workingSongId, id);
+		}
+	}
+
+	function startEditVideoLink(link: VideoLink) {
+		videoUrlInput = link.url;
+		videoTitleInput = link.title;
+		videoUrlValid = true; // URL is fixed/pre-validated, shown read-only
+		editingVideoLinkId = link.id;
+	}
+
+	function cancelEditVideoLink() {
+		resetVideoInputs();
+	}
+
+	function toggleVideoPreview(id: string) {
+		openVideoPreviewId = openVideoPreviewId === id ? null : id;
+	}
+
+	function getVideoEmbedUrl(url: string): string | null {
+		const ytId = extractYouTubeId(url);
+		return ytId ? getEmbedUrl(ytId) : null;
+	}
 
 	// Undo/redo — plain array stack scoped to this drawer session (§5.7, placeholder for v1)
 	let history = $state<string[]>([]);
@@ -184,6 +292,9 @@
 		chordColour = song.chordColour;
 		isFavourite = song.isFavourite;
 		dateAdded = song.dateAdded;
+		videoLinks = song.videoLinks ?? [];
+		resetVideoInputs();
+		openVideoPreviewId = null;
 
 		committed = { title, artist, rawText };
 		hasParsedOnce = true;
@@ -211,6 +322,9 @@
 		chordColour = settings.defaultChordColour;
 		isFavourite = false;
 		dateAdded = new Date().toISOString();
+		videoLinks = [];
+		resetVideoInputs();
+		openVideoPreviewId = null;
 
 		committed = { title: '', artist: '', rawText: '' };
 		hasParsedOnce = false;
@@ -386,7 +500,8 @@
 			fontSize,
 			chordColour,
 			isFavourite,
-			dateAdded: dateAdded || new Date().toISOString()
+			dateAdded: dateAdded || new Date().toISOString(),
+			videoLinks
 		});
 
 		await saveSong(song);
@@ -590,6 +705,112 @@
         <div class="form-group">
             <label for="artist">Artist/Info <span class="input-hint">(Optional)</span></label>
             <input type="text" id="artist" bind:value={artist} />
+        </div>
+
+        <div class="video-dropdown">
+            <button
+                type="button"
+                class="video-dropdown-toggle"
+                onclick={() => (videoSectionOpen = !videoSectionOpen)}
+                aria-expanded={videoSectionOpen}
+            >
+                <span class="video-dropdown-label">Video <span class="input-hint">(Optional)</span></span>
+                <Icon name={videoSectionOpen ? 'chevron-up' : 'chevron-down'} size={18} color="var(--text-secondary)" />
+            </button>
+            <hr class="video-dropdown-sep" />
+
+            {#if videoSectionOpen}
+            <div class="video-dropdown-content">
+                <div class="form-group">
+                    <div class="video-url-row">
+                        <input
+                            type="text"
+                            id="video-url"
+                            class="video-url-input"
+                            class:readonly-url={!!editingVideoLinkId}
+                            placeholder="Add URL: https://www.youtube.com/..."
+                            bind:value={videoUrlInput}
+                            readonly={!!editingVideoLinkId}
+                            oninput={onVideoUrlInput}
+                        />
+                        <button
+                            type="button"
+                            class="video-url-confirm-btn"
+                            class:active={!!videoUrlInput.trim() && videoUrlValid !== true}
+                            class:success={videoUrlValid === true}
+                            disabled={!videoUrlInput.trim() || videoUrlValid === true}
+                            onclick={validateVideoUrl}
+                            aria-label={videoUrlValid === true ? 'URL validated' : 'Validate URL'}
+                        >
+                            <Icon name={videoUrlValid === true ? 'check' : 'chevron-right'} size={20} />
+                        </button>
+                    </div>
+                    {#if videoUrlValid === false}
+                        <p class="video-url-error">URL failed. Please try again.</p>
+                    {/if}
+                </div>
+
+                <div class="form-group">
+                    <div class="video-title-row">
+                        <input
+                            type="text"
+                            id="video-title"
+                            placeholder="Video Title"
+                            bind:value={videoTitleInput}
+                            disabled={videoUrlValid !== true}
+                        />
+                        <button
+                            type="button"
+                            class="video-confirm-btn"
+                            class:active={videoUrlValid === true && !!videoTitleInput.trim()}
+                            disabled={videoUrlValid !== true || !videoTitleInput.trim()}
+                            onclick={confirmVideoLink}
+                            aria-label={editingVideoLinkId ? 'Save video title' : 'Add video link'}
+                        >
+                            <Icon name="chevron-right" size={20} />
+                        </button>
+                    </div>
+                    {#if editingVideoLinkId}
+                        <button type="button" class="video-cancel-edit" onclick={cancelEditVideoLink}>Cancel</button>
+                    {/if}
+                </div>
+
+                {#if videoLinks.length > 0}
+                <div class="video-links-list">
+                    {#each videoLinks as link (link.id)}
+                        <div class="video-link-row">
+                            <Icon name="video" size={18} color="var(--text-secondary)" />
+                            <span class="video-link-title">{link.title}</span>
+                            <button class="video-link-icon-btn" aria-label="Delete video link" onclick={() => deleteVideoLinkRow(link.id)}>
+                                <Icon name="trash" size={18} color="var(--text-secondary)" />
+                            </button>
+                            <button class="video-link-icon-btn" aria-label="Edit video link" onclick={() => startEditVideoLink(link)}>
+                                <Icon name="edit" size={18} color="var(--text-secondary)" />
+                            </button>
+                            <button class="video-link-icon-btn" aria-label={openVideoPreviewId === link.id ? 'Hide preview' : 'View preview'} onclick={() => toggleVideoPreview(link.id)}>
+                                <Icon name={openVideoPreviewId === link.id ? 'view-hide' : 'view'} size={18} color="var(--text-secondary)" />
+                            </button>
+                        </div>
+                        {#if openVideoPreviewId === link.id}
+                            <div class="video-preview">
+                                {#if getVideoEmbedUrl(link.url)}
+                                    <iframe
+                                        src={getVideoEmbedUrl(link.url)}
+                                        title={link.title}
+                                        frameborder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen
+                                    ></iframe>
+                                {:else}
+                                    <p class="video-preview-fallback">This link can't be previewed here — it will still be saved.</p>
+                                {/if}
+                            </div>
+                        {/if}
+                    {/each}
+                </div>
+                {/if}
+            </div>
+            {/if}
         </div>
 
         {#if parseError}
@@ -1256,6 +1477,188 @@
     .import-message {
         font-size: 0.9em;
         color: var(--text-secondary);
+    }
+    .video-dropdown {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+    .video-dropdown-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        border: none;
+        background: none;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+        color: var(--text-primary);
+    }
+    .video-dropdown-label {
+        font-size: var(--text-base);
+    }
+    .video-dropdown-sep {
+        border: none;
+        border-top: 1px solid var(--color-separator);
+        margin: 0;
+    }
+    .video-dropdown-content {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+    .video-url-row {
+        display: flex;
+        align-items: stretch;
+        gap: var(--space-sm);
+    }
+    .video-url-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        text-overflow: ellipsis;
+    }
+    .video-url-input:focus {
+        border-color: var(--accent-brand);
+        outline: none;
+    }
+    .video-url-input.readonly-url {
+        background: var(--bg-surface);
+        color: var(--text-secondary);
+        cursor: default;
+    }
+    .video-url-confirm-btn {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--bg-main);
+        color: var(--color-border);
+        cursor: not-allowed;
+    }
+    .video-url-confirm-btn.active {
+        color: var(--accent-brand);
+        border-color: var(--accent-brand);
+        cursor: pointer;
+    }
+    .video-url-confirm-btn.success {
+        color: var(--accent-brand);
+        border-color: var(--accent-brand);
+        cursor: default;
+    }
+    .video-url-error {
+        margin: 0;
+        font-size: 0.85em;
+        color: #9b2c26;
+    }
+    .video-title-row {
+        display: flex;
+        align-items: stretch;
+        gap: var(--space-sm);
+    }
+    .video-title-row input {
+        flex: 1 1 auto;
+        min-width: 0;
+        background: var(--bg-main);
+    }
+    .video-title-row input:disabled {
+        cursor: not-allowed;
+        background: var(--bg-main);
+        color: var(--text-secondary);
+        border-color: var(--color-border);
+    }
+    .video-title-row input:not(:disabled) {
+        border-color: var(--accent-brand);
+    }
+    .video-title-row input:not(:disabled):focus {
+        outline: none;
+        border-color: var(--accent-brand);
+    }
+    .video-confirm-btn {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--bg-main);
+        color: var(--color-border);
+        cursor: not-allowed;
+    }
+    .video-confirm-btn.active {
+        color: var(--accent-brand);
+        border-color: var(--accent-brand);
+        cursor: pointer;
+    }
+    .video-confirm-btn:disabled {
+        color: var(--color-border);
+        border-color: var(--color-border);
+        cursor: not-allowed;
+    }
+    .video-cancel-edit {
+        margin-top: var(--space-xs);
+        font-size: 0.85em;
+        color: var(--accent-brand);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        text-align: left;
+        align-self: flex-start;
+    }
+    .video-links-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+    .video-link-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-sm);
+        padding: var(--space-xs) 0;
+    }
+    .video-link-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--text-base);
+    }
+    .video-link-icon-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        line-height: 0;
+        flex-shrink: 0;
+    }
+    .video-preview {
+        margin: 0 0 var(--space-sm) 0;
+    }
+    .video-preview iframe {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+    }
+    .video-preview-fallback {
+        margin: 0;
+        padding: var(--space-sm);
+        color: var(--text-secondary);
+        font-size: 0.9em;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--bg-surface);
     }
 	.modal {
 		position: fixed;

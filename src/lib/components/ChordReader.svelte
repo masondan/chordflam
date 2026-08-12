@@ -4,6 +4,7 @@
 	import Icon from './icons/Icon.svelte';
 	import { formatParsedLineForDisplay } from '$lib/utils/parser';
 	import { getSong, updateSongDisplay, updateSettings, type Song } from '$lib/db/db';
+	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
 
 	let { isOpen, songId, onClose, onEdit } = $props<{
 		isOpen: boolean;
@@ -36,6 +37,47 @@
 	let showColourMenu = $state(false);
 	let colourPickerEl: HTMLDivElement | undefined = $state();
 
+	// Video links display (see AGENTS.md / plan handoff §Video Links Part 3).
+	// No persistence — Reader always opens with all videos collapsed. Only
+	// one row can be expanded (iframe or failure-fallback message) at a time
+	// across the whole list.
+	let openVideoId = $state<string | null>(null);
+	let videoFailedId = $state<string | null>(null); // which row is showing the "could not be opened" fallback
+
+	function toggleVideoRow(id: string, url: string) {
+		if (openVideoId === id) {
+			// Collapse whatever is open (iframe or fallback message).
+			openVideoId = null;
+			videoFailedId = null;
+			return;
+		}
+		// Opening a different row always closes whatever was open first.
+		videoFailedId = null;
+		const ytId = extractYouTubeId(url);
+		if (ytId) {
+			openVideoId = id;
+		} else {
+			openVideoId = id;
+			videoFailedId = id;
+		}
+	}
+
+	function getVideoEmbedUrl(url: string): string | null {
+		const ytId = extractYouTubeId(url);
+		return ytId ? getEmbedUrl(ytId) : null;
+	}
+
+	function openVideoExternally(url: string) {
+		window.open(url, '_blank');
+		openVideoId = null;
+		videoFailedId = null;
+	}
+
+	function cancelVideoFallback() {
+		openVideoId = null;
+		videoFailedId = null;
+	}
+
 	// Mirrors the load-guard pattern in ChordActions: only (re)load when the
 	// drawer actually opens or the song being viewed changes, never on every render.
 	let loadedKey: string | null = null;
@@ -44,6 +86,8 @@
 		if (!isOpen) {
 			loadedKey = null;
 			showColourMenu = false;
+			openVideoId = null;
+			videoFailedId = null;
 			return;
 		}
 
@@ -53,6 +97,8 @@
 
 		showKeyboards = true;
 		showColourMenu = false;
+		openVideoId = null;
+		videoFailedId = null;
 
 		if (songId) {
 			loadSong(songId);
@@ -204,6 +250,46 @@
 				{/if}
 			{/each}
 		</div>
+
+		{#if song.videoLinks && song.videoLinks.length > 0}
+		<div class="video-section">
+			<div class="video-separator"></div>
+			{#each song.videoLinks as link (link.id)}
+				<div class="video-row">
+					<Icon name="video" size={18} color="var(--text-secondary)" />
+					<span class="video-row-title">{link.title}</span>
+					<button
+						class="video-row-icon-btn"
+						aria-label={openVideoId === link.id ? 'Hide video' : 'View video'}
+						onclick={() => toggleVideoRow(link.id, link.url)}
+					>
+						<Icon name={openVideoId === link.id ? 'view-hide' : 'view'} size={18} color="var(--text-secondary)" />
+					</button>
+				</div>
+				{#if openVideoId === link.id}
+					{#if videoFailedId === link.id}
+						<div class="video-fallback">
+							<p>Video could not be opened. Try in browser/app?</p>
+							<div class="video-fallback-actions">
+								<button class="btn-modal" onclick={cancelVideoFallback}>Cancel</button>
+								<button class="btn-modal btn-modal-primary" onclick={() => openVideoExternally(link.url)}>Yes</button>
+							</div>
+						</div>
+					{:else}
+						<div class="video-embed">
+							<iframe
+								src={getVideoEmbedUrl(link.url)}
+								title={link.title}
+								frameborder="0"
+								allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+								allowfullscreen
+							></iframe>
+						</div>
+					{/if}
+				{/if}
+			{/each}
+		</div>
+		{/if}
 	</div>
 	{:else}
 	<div class="content">
@@ -391,5 +477,84 @@
 		color: var(--text-secondary);
 		text-align: center;
 		padding: var(--space-xl) 0;
+	}
+	.video-section {
+		margin-top: var(--space-md);
+	}
+	.video-separator {
+		height: 1px;
+		background: var(--color-separator);
+		margin-bottom: var(--space-sm);
+	}
+	.video-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		margin-bottom: var(--space-sm);
+		background: var(--bg-surface);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+	}
+	.video-row-title {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: var(--text-sm, 0.9em);
+		color: var(--text-secondary);
+	}
+	.video-row-icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		line-height: 0;
+		flex-shrink: 0;
+	}
+	.video-embed {
+		margin-bottom: var(--space-sm);
+	}
+	.video-embed iframe {
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+	.video-fallback {
+		margin-bottom: var(--space-sm);
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-surface);
+		text-align: center;
+	}
+	.video-fallback p {
+		margin: 0 0 var(--space-md) 0;
+		color: var(--text-primary);
+	}
+	.video-fallback-actions {
+		display: flex;
+		justify-content: center;
+		gap: var(--space-md);
+	}
+	.btn-modal {
+		flex: 1;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: var(--text-primary);
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.btn-modal.btn-modal-primary {
+		border-color: var(--accent-brand);
+		background: var(--accent-brand);
+		color: #ffffff;
 	}
 </style>

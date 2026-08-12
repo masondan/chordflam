@@ -10,6 +10,12 @@ export interface ParsedLine {
   segments: ParsedSegment[];
 }
 
+export interface VideoLink {
+  id: string;
+  url: string;
+  title: string;
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -23,6 +29,7 @@ export interface Song {
   chordColour: string;
   isFavourite: boolean;
   dateAdded: string; // ISO string
+  videoLinks?: VideoLink[]; // optional, defaults to undefined/[] — most-recent-first order
 }
 
 export interface AppSettings {
@@ -84,6 +91,38 @@ export async function updateSongDisplay(
   updates: Partial<Pick<Song, 'fontSize' | 'chordColour'>>
 ): Promise<void> {
   await db.songs.update(id, updates);
+}
+
+// --- Video Links CRUD ---
+// Video links save/update/delete independently of the "Chord It" commit
+// flow — same immediate-write pattern as toggleFavourite. Only applicable
+// to songs that already exist in the DB; a new/unsaved song (Add mode in
+// Chord Actions) holds video links in local drawer state until the first
+// save, per the plan handoff decision.
+
+export async function addVideoLink(songId: string, link: VideoLink): Promise<void> {
+  const song = await getSong(songId);
+  if (!song) return;
+  const videoLinks = [link, ...(song.videoLinks ?? [])];
+  await db.songs.update(songId, { videoLinks });
+}
+
+export async function updateVideoLink(
+  songId: string,
+  linkId: string,
+  updates: Partial<Pick<VideoLink, 'title'>>
+): Promise<void> {
+  const song = await getSong(songId);
+  if (!song || !song.videoLinks) return;
+  const videoLinks = song.videoLinks.map((l) => (l.id === linkId ? { ...l, ...updates } : l));
+  await db.songs.update(songId, { videoLinks });
+}
+
+export async function deleteVideoLink(songId: string, linkId: string): Promise<void> {
+  const song = await getSong(songId);
+  if (!song || !song.videoLinks) return;
+  const videoLinks = song.videoLinks.filter((l) => l.id !== linkId);
+  await db.songs.update(songId, { videoLinks });
 }
 
 // --- CRUD Operations for AppSettings ---
