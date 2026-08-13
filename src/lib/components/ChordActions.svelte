@@ -1625,10 +1625,13 @@
         gap: var(--space-xs);
     }
     .video-link-row {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
-        padding: var(--space-xs) 0;
+    	display: flex;
+    	align-items: center;
+    	gap: var(--space-sm);
+    	padding: var(--space-sm) var(--space-md);
+    	margin-bottom: var(--space-sm);
+    	background: var(--bg-surface);
+    	border-radius: var(--radius-md);
     }
     .video-link-title {
         flex: 1 1 auto;
