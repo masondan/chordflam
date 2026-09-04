@@ -4,6 +4,7 @@
 	import Icon from './icons/Icon.svelte';
 	import { parseSong, formatParsedLineForDisplay, extractChordOccurrences } from '$lib/utils/parser';
 	import { transposeRawText, transposeChord, semitoneDistance } from '$lib/utils/transpose';
+	import { chordDisplayLabel } from '$lib/utils/chordToKeys';
 	import { detectKey, isMajorEdit } from '$lib/utils/keyDetection';
 	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
 	import {
@@ -304,14 +305,26 @@
 		openVideoPreviewId = null;
 
 		committed = { title, artist, rawText };
-		hasParsedOnce = true;
-		isPreview = true;
+		// A song saved with title/meta only (no chord data yet) has no rawText
+		// to preview — opening straight into Preview with nothing to show left
+		// the Edit tab permanently disabled (hasContent === false, see
+		// hasContent/toggle logic below) with no way back into the textarea.
+		// Only start in Preview/parsed state if there's actually something to
+		// show; otherwise open in Edit mode, same as a brand-new song.
+		const hasText = rawText.trim().length > 0;
+		hasParsedOnce = hasText;
+		isPreview = hasText;
 		parseError = false;
 		history = [];
 		redoStack = [];
-		toolbarActive = true;
+		toolbarActive = hasText;
 		hasEverBeenModified = false;
-		runParse(rawText, { silent: true });
+		if (hasText) {
+			runParse(rawText, { silent: true });
+		} else {
+			parsedLines = [];
+			chordList = [];
+		}
 	}
 
 	async function resetForNewSong() {
@@ -516,8 +529,16 @@
 	}
 
 	function togglePreview() {
+		// Preview -> Edit is always allowed, even with no content — otherwise
+		// a song saved with no chord data (see loadExistingSong) could get
+		// stuck showing an empty Preview with no way back into the textarea.
+		// Edit -> Preview still requires actual content to preview.
+		if (isPreview) {
+			isPreview = false;
+			return;
+		}
 		if (!hasContent) return;
-		isPreview = !isPreview;
+		isPreview = true;
 	}
 
 	// --- Toolbar: text editing helpers (§5.3) ---
@@ -928,12 +949,12 @@
 
         <div class="actions">
             <button class="btn-pill btn-pill-primary" disabled={!dirty} onclick={chordIt}>Chord It</button>
-            <div class="edit-preview-toggle" class:disabled={!hasContent}>
+            <div class="edit-preview-toggle" class:disabled={!hasContent && !isPreview}>
                 <button
                     type="button"
                     class="toggle-segment"
                     class:active={!isPreview}
-                    disabled={!hasContent}
+                    disabled={!hasContent && !isPreview}
                     onclick={() => isPreview && togglePreview()}
                 >
                     Edit
@@ -967,7 +988,7 @@
                 </div>
                 <div class="chord-progression">
                     {#each liveChordProgression as chord (chord)}
-                        <span class="chord-chip">{chord}</span>
+                        <span class="chord-chip">{chordDisplayLabel(chord)}</span>
                     {/each}
                 </div>
             </div>

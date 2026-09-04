@@ -3,6 +3,7 @@
 	import KeyboardGrid from './KeyboardGrid.svelte';
 	import Icon from './icons/Icon.svelte';
 	import { formatParsedLineForDisplay } from '$lib/utils/parser';
+	import { chordDisplayLabel } from '$lib/utils/chordToKeys';
 	import { getSong, updateSongDisplay, updateSettings, type Song } from '$lib/db/db';
 	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
 
@@ -180,7 +181,7 @@
 			</p>
 			{#if song.chordList.length > 0}
 			<p class="chords-line">
-				Chords: {#each song.chordList as chord, i}{chord}{i < song.chordList.length - 1 ? '  ' : ''}{/each}
+				Chords: {#each song.chordList as chord, i}{chordDisplayLabel(chord)}{i < song.chordList.length - 1 ? '  ' : ''}{/each}
 			</p>
 			{/if}
 		</div>

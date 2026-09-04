@@ -1,7 +1,14 @@
 <script lang="ts">
-	import { chordToPitchClasses, type PitchClassRole } from '$lib/utils/chordToKeys';
+	import { chordToPitchClasses, chordDisplayLabel, type PitchClassRole } from '$lib/utils/chordToKeys';
 
 	let { chordName }: { chordName: string } = $props();
+
+	// Slash chords (e.g. Db/Ab) show only the part before the "/" in this
+	// label — the bass note is a voicing note, not a second chord, and is
+	// not represented in the diagram (see chordToKeys.ts). This only
+	// affects this title; the chord-sheet body elsewhere always shows the
+	// full original string.
+	const displayLabel = $derived(chordDisplayLabel(chordName));
 
 	// Fixed reference keyboard (§6.2) — two full octaves (14 white keys, C→B).
 	// The keyboard itself never shifts per-chord; only the dots move. It always
@@ -50,10 +57,12 @@
 
 	const totalWidth = $derived(whiteKeys.length * WHITE_KEY_WIDTH + BLACK_KEY_WIDTH / 2);
 
-	// Basic triad (root, 3rd, 5th), plus a 7th dot when the chord has one,
-	// plus slash-chord bass if present — per §6.1. Returned as an ordered
-	// array: [root, 3rd, 5th, ?7th, ?bass], each tagged with its role so the
-	// diagram can style the 7th dot slightly differently from the triad.
+	// Basic triad (root, 3rd, 5th), plus a 7th dot when the chord has one —
+	// per §6.1. Returned as an ordered array: [root, 3rd, 5th, ?7th], each
+	// tagged with its role so the diagram can style the 7th dot slightly
+	// differently from the triad. Slash chords are stripped to the part
+	// before the "/" before this lookup (see chordToKeys.ts) — the bass
+	// note is not represented in the diagram, only in the text label above.
 	const pitchClassArray = $derived(chordToPitchClasses(chordName));
 
 	// Each note in the ordered array gets exactly one dot, placed at the first
@@ -80,7 +89,7 @@
 </script>
 
 <div class="piano-diagram">
-	<div class="chord-label">{chordName}</div>
+	<div class="chord-label">{displayLabel}</div>
 	<svg viewBox="0 0 {totalWidth} {WHITE_KEY_HEIGHT}" width={totalWidth} height={WHITE_KEY_HEIGHT}>
 		{#each whiteKeys as key (key.x)}
 			<path

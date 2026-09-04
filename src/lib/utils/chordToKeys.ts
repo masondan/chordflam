@@ -44,8 +44,21 @@ function seventhOffset(intervals: string[]): number | null {
   return null;
 }
 
+/**
+ * Strips the bass note from a slash-chord symbol for *display* purposes
+ * (keyboard-diagram title, transpose chord-chip, Chord Reader's "Chords:"
+ * summary line). E.g. "Db/Ab" -> "Db", "C" -> "C" (unchanged, no slash).
+ *
+ * This is purely a label helper — it does NOT affect rawText, parser.ts,
+ * or the rendered chord-sheet body (chords-over-lyrics), which must keep
+ * showing the full "Db/Ab" so the player knows exactly what to play.
+ */
+export function chordDisplayLabel(chordSymbol: string): string {
+  return chordSymbol.split('/')[0].trim();
+}
+
 /** The role a dot plays in the diagram, used to pick its colour/style. */
-export type PitchClassRole = 'triad' | 'seventh' | 'bass';
+export type PitchClassRole = 'triad' | 'seventh';
 
 export interface PitchClassEntry {
   pc: number;
@@ -59,11 +72,19 @@ export interface PitchClassEntry {
  *
  * Resolves to the basic triad (root, 3rd, 5th) in root position, plus a
  * 7th dot when the chord symbol contains one (Maj7, 7, m7, m7b5, dim7, and
- * further extensions that still carry a 7th) per §6.1. An explicit
- * slash-chord bass note (e.g. C/E) is added as an extra "bass" dot.
+ * further extensions that still carry a 7th) per §6.1.
+ *
+ * Slash chords (e.g. Db/Ab) are a voicing note, not a second chord — the
+ * diagram only ever shows the chord *before* the slash. `tonal`'s
+ * `Chord.get()` can't reliably parse slash-chord strings as a single chord
+ * (it comes back empty), so the bass part is stripped before lookup. The
+ * bass note itself is discarded here and never rendered — the full label
+ * (including "/Ab") is still shown as text by the caller; only the diagram
+ * generation is affected.
  */
 export function chordToPitchClasses(chordSymbol: string): PitchClassEntry[] {
-  const chord = Chord.get(chordSymbol);
+  const chordPart = chordSymbol.split('/')[0].trim();
+  const chord = Chord.get(chordPart);
 
   if (chord.empty || !chord.tonic) {
     return [];
@@ -74,7 +95,7 @@ export function chordToPitchClasses(chordSymbol: string): PitchClassEntry[] {
     return [];
   }
 
-  // Return notes in order: [root, 3rd, 5th, ?7th, ...bass].
+  // Return notes in order: [root, 3rd, 5th, ?7th].
   // This ensures the diagram always reads left-to-right as
   // root→3rd→5th→7th when the keyboard's dots are placed in sequence from
   // the root's position.
@@ -88,15 +109,6 @@ export function chordToPitchClasses(chordSymbol: string): PitchClassEntry[] {
   const seventh = seventhOffset(chord.intervals);
   if (seventh !== null) {
     result.push({ pc: (rootPc + seventh) % 12, role: 'seventh' });
-  }
-
-  // Explicit slash-chord bass note (§6.1 exception) — added as an extra dot
-  // even though it's not part of the root-position triad above.
-  if (chord.bass) {
-    const bassPc = Note.chroma(chord.bass);
-    if (bassPc !== undefined && !result.some((entry) => entry.pc === bassPc)) {
-      result.push({ pc: bassPc, role: 'bass' });
-    }
   }
 
   return result;
