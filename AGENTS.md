@@ -28,6 +28,7 @@ No backend, no accounts, no server storage, no external chord APIs, no scraping.
 - **Mini-keyboards are computed, never stored.** Pitch-class only (not fingering/inversion), via `tonal`, rendered as SVG. Chord Reader only, not a persistent panel in Chord Actions.
 - **Delete = modal "Are you sure?" confirm** for v1 (known placeholder, see plan §10).
 - Light mode only. No theme toggle, no theme field in the data model.
+- **ChordActions drawer layout:** Edit/View toggle and "Chord It" button are sticky-positioned at the bottom of the drawer (both Edit and View modes). Edit textarea auto-grows to fit content (no fixed height, no internal scroll). Drawer is the single scroll container — no nested scrollports.
 
 ## Data model
 
