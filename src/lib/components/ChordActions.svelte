@@ -966,7 +966,7 @@
                     disabled={!hasContent}
                     onclick={() => !isPreview && togglePreview()}
                 >
-                    Preview
+                    View
                 </button>
             </div>
         </div>
