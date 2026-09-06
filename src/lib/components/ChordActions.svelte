@@ -1286,7 +1286,15 @@
     	border-radius: var(--radius-sm);
     	border: 1px solid var(--color-border);
     	font-family: var(--font-family-mono);
-    	overflow-x: auto;
+    	/* No overflow-x: auto here deliberately — per CSS spec, setting
+    	   overflow-x to a non-visible value while overflow-y stays at its
+    	   initial 'visible' forces the *used* value of overflow-y to become
+    	   'auto' as well, creating a second, independently-scrollable vertical
+    	   scrollport nested inside the drawer's own scroll container. That's
+    	   what caused the "sticky"/conflicting double-scrollbar bug (see
+    	   AGENTS.md fix log). The drawer (Drawer.svelte) is the single source
+    	   of vertical scrolling now; long chord/lyric lines simply extend
+    	   past this box's edge rather than opening a competing scrollport. */
     }
     .empty-preview {
     	color: var(--text-secondary);
