@@ -595,6 +595,30 @@
 		// browser's native undo within the textarea itself.
 	}
 
+	// Auto-grow the edit textarea to fit its content, rather than a fixed-height
+	// box with internal scrolling. Safe now that the Chord It / Edit-View bar is
+	// sticky (§ sticky actions fix) — the user no longer needs a capped-height
+	// input to keep those controls reachable.
+	function autosizeTextarea() {
+		const el = textareaRef;
+		if (!el) return;
+		// offsetHeight - clientHeight captures border width (box-sizing: border-box),
+		// so the applied height doesn't clip by a couple of pixels and re-trigger scroll.
+		const offset = el.offsetHeight - el.clientHeight;
+		el.style.height = 'auto';
+		el.style.height = `${el.scrollHeight + offset}px`;
+	}
+
+	// Re-run whenever rawText changes (typing, undo/redo, toolbar inserts, or
+	// loading a song) or when switching from Preview back to Edit — anything
+	// that can change the textarea's content while it's hidden. Only matters
+	// while the textarea is actually shown.
+	$effect(() => {
+		void rawText;
+		if (isPreview) return;
+		requestAnimationFrame(autosizeTextarea);
+	});
+
 	function undo() {
 		if (history.length === 0) return;
 		const previous = history[history.length - 1];
@@ -1214,7 +1238,11 @@
     .canvas {
     	width: 100%;
     	min-height: 200px;
-    	resize: vertical;
+    	/* Height is set programmatically (autosizeTextarea) to fit content —
+    	   no manual resize handle or internal scrollbar needed now that the
+    	   Chord It / Edit-View bar is sticky at the bottom of the drawer. */
+    	resize: none;
+    	overflow: hidden;
     	font-family: var(--font-family-mono);
     	white-space: pre;
     	background: var(--bg-main);
@@ -1287,6 +1315,14 @@
     	font-family: var(--font-family-mono);
     }
     .actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        background: var(--bg-main);
+        padding: var(--space-sm) var(--space-md) max(var(--space-sm), env(safe-area-inset-bottom));
+        margin: 0 calc(-1 * var(--space-md));
+        border-top: 1px solid var(--color-border);
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
         display: flex;
         align-items: center;
         justify-content: space-between;
