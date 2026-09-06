@@ -599,14 +599,31 @@
 	// box with internal scrolling. Safe now that the Chord It / Edit-View bar is
 	// sticky (§ sticky actions fix) — the user no longer needs a capped-height
 	// input to keep those controls reachable.
+	//
+	// Desktop scroll-jump fix: momentarily setting height to 'auto' collapses
+	// the textarea to its unstyled height so we can read the *new* scrollHeight.
+	// If the drawer is scrolled down at that instant, collapsing the textarea
+	// shrinks the drawer's total scrollable content, and the browser clamps
+	// .drawer's scrollTop upwards to keep it in bounds — a clamp that is NOT
+	// undone when we immediately grow the textarea back out. Net effect: the
+	// whole page visibly jumps on every keystroke once the textarea is taller
+	// than the viewport. Recording and restoring the drawer's scrollTop around
+	// the collapse/measure/expand keeps the viewport rock-steady.
 	function autosizeTextarea() {
 		const el = textareaRef;
 		if (!el) return;
+		const drawer = el.closest<HTMLElement>('.drawer');
+		const prevScrollTop = drawer?.scrollTop ?? 0;
+
 		// offsetHeight - clientHeight captures border width (box-sizing: border-box),
 		// so the applied height doesn't clip by a couple of pixels and re-trigger scroll.
 		const offset = el.offsetHeight - el.clientHeight;
 		el.style.height = 'auto';
 		el.style.height = `${el.scrollHeight + offset}px`;
+
+		if (drawer && drawer.scrollTop !== prevScrollTop) {
+			drawer.scrollTop = prevScrollTop;
+		}
 	}
 
 	// Re-run whenever rawText changes (typing, undo/redo, toolbar inserts, or
