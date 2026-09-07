@@ -3,6 +3,7 @@ import Dexie, { type Table } from 'dexie';
 export interface ParsedSegment {
   chord: string | null;
   lyric: string;
+  inversion?: 'middle' | 'backward';
 }
 
 export interface ParsedLine {

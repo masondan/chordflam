@@ -578,6 +578,14 @@
 		insertAtCursor('#');
 	}
 
+	function insertChevronMiddle() {
+		insertAtCursor('‹');
+	}
+
+	function insertChevronBackward() {
+		insertAtCursor('«');
+	}
+
 	function copySelection() {
 		const el = textareaRef;
 		if (!el) return;
@@ -925,6 +933,23 @@
             <button
                 class="toolbar-btn"
                 disabled={!toolbarActive || isPreview}
+                onclick={insertChevronMiddle}
+                aria-label="Insert middle inversion marker"
+            >
+                <Icon name="chevron-left" size={18} />
+            </button>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
+                onclick={insertChevronBackward}
+                aria-label="Insert backward inversion marker"
+            >
+                <Icon name="chevron-double-left" size={18} />
+            </button>
+            <div class="toolbar-spacer"></div>
+            <button
+                class="toolbar-btn"
+                disabled={!toolbarActive || isPreview}
                 onclick={copySelection}
                 aria-label="Copy selection"
             >
@@ -1209,11 +1234,16 @@
         display: flex;
         gap: var(--space-xs);
         flex-wrap: wrap;
+        align-items: center;
+    }
+    .toolbar-spacer {
+        flex: 1 1 auto;
+        min-width: 0;
     }
     .toolbar-btn {
+        width: 36px;
         height: 36px;
-        min-width: 44px;
-        padding: 0 var(--space-sm);
+        padding: 0;
         border-radius: var(--radius-sm);
         border: 1px solid var(--color-border);
         background: var(--bg-main);
@@ -1222,6 +1252,7 @@
         justify-content: center;
         color: #cccccc;
         cursor: not-allowed;
+        flex-shrink: 0;
     }
     .toolbar-btn:not(:disabled) {
         color: #777777;

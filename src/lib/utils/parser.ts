@@ -1,6 +1,40 @@
 import { type ParsedLine, type ParsedSegment } from '../db/db';
 
 /**
+ * Extracts and removes inversion marker from a chord symbol.
+ * Returns { chord: stripped chord, inversion: 'middle' | 'backward' | undefined }.
+ *
+ * Markers, in order of preference:
+ *  - '‹' (U+2039 SINGLE LEFT-POINTING ANGLE QUOTATION MARK) = middle inversion
+ *  - '«' (U+00AB LEFT-POINTING DOUBLE ANGLE QUOTATION MARK) = backward inversion
+ *    — a single character that reads visually as a double chevron, deliberately
+ *    chosen over two literal '‹‹' characters so the marker never disturbs the
+ *    monospace column-alignment math in formatParsedLineForDisplay (a 2-char
+ *    marker widens the chord label unevenly vs. the single-char '‹', and any
+ *    letter-spacing/CSS trick to compensate distorts chord/lyric alignment
+ *    for the entire row, not just the marker — see chevron-handoff follow-up).
+ * Legacy ASCII '<' / '<<' are still accepted on read for backward-compat with
+ * any text typed before this switch, but the toolbar only ever inserts the
+ * Unicode single-char forms now, so newly-authored text always normalises to
+ * one of the two Unicode markers above on next parse.
+ */
+export function extractInversionMarker(raw: string): { chord: string; inversion?: 'middle' | 'backward' } {
+  const trimmed = raw.trim();
+  // Backward inversion: single '«', or legacy ASCII '<<'
+  if (trimmed.endsWith('«')) {
+    return { chord: trimmed.slice(0, -1).trim(), inversion: 'backward' };
+  }
+  if (trimmed.endsWith('<<')) {
+    return { chord: trimmed.slice(0, -2).trim(), inversion: 'backward' };
+  }
+  // Middle inversion: single '‹', or legacy ASCII '<'
+  if (trimmed.endsWith('‹') || trimmed.endsWith('<')) {
+    return { chord: trimmed.slice(0, -1).trim(), inversion: 'middle' };
+  }
+  return { chord: trimmed };
+}
+
+/**
  * Section markers that should not be treated as chords.
  * Matches patterns like [Verse], [Verse 1], [Verse 2], [Pre-Chorus], etc.
  */
@@ -166,7 +200,17 @@ export function formatParsedLineForDisplay(line: ParsedLine): { chordRow: string
         // together or shifting the lyric text.
         chordRow += ' ';
       }
-      chordRow += seg.chord;
+      // Re-attach inversion marker if present (display-only, not stored in chord
+      // itself). Each marker is exactly one character — see extractInversionMarker
+      // for why '«' (not '‹‹') is used for backward — so this never perturbs the
+      // monospace column-alignment math above, which counts on 1 char = 1 column.
+      let displayChord = seg.chord;
+      if (seg.inversion === 'middle') {
+        displayChord += '‹';
+      } else if (seg.inversion === 'backward') {
+        displayChord += '«';
+      }
+      chordRow += displayChord;
     }
     lyricRow += seg.lyric;
   }
@@ -224,7 +268,8 @@ export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordLi
          segments.push({ chord: null, lyric: lyricBefore });
        }
 
-       const chord = match[1].trim();
+       const rawChord = match[1].trim();
+       const { chord, inversion } = extractInversionMarker(rawChord);
        const isSection = isSectionMarker(chord);
        
        if (chord) {
@@ -249,7 +294,7 @@ export function parseSong(rawText: string): { parsedLines: ParsedLine[], chordLi
        if (isSection) {
          segments.push({ chord: null, lyric: chord + lyricAfter });
        } else {
-         segments.push({ chord: chord, lyric: lyricAfter });
+         segments.push({ chord: chord, lyric: lyricAfter, inversion });
        }
        lastIndex += lyricAfter.length;
      }

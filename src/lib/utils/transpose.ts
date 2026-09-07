@@ -1,4 +1,5 @@
 import { Chord, Note } from 'tonal';
+import { extractInversionMarker } from './parser';
 
 /**
  * Extracts just the tonic (root note) from a chord/key symbol, e.g. "Am7" -> "A", "F#m" -> "F#".
@@ -85,7 +86,10 @@ function semitonesToInterval(semitones: number): string {
 export function transposeRawText(rawText: string, semitones: number): string {
   if (semitones === 0 || semitones % 12 === 0) return rawText;
 
-  return rawText.replace(/\[(.*?)\]/g, (match, chord) => {
-    return `[${transposeChord(chord.trim(), semitones)}]`;
+  return rawText.replace(/\[(.*?)\]/g, (match, chordWithMarker) => {
+    const { chord, inversion } = extractInversionMarker(chordWithMarker.trim());
+    const transposed = transposeChord(chord, semitones);
+    const marker = inversion === 'middle' ? '‹' : inversion === 'backward' ? '«' : '';
+    return `[${transposed}${marker}]`;
   });
 }
