@@ -4,8 +4,9 @@
 	import Icon from './icons/Icon.svelte';
 	import { formatParsedLineForDisplay } from '$lib/utils/parser';
 	import { chordDisplayLabel } from '$lib/utils/chordToKeys';
-	import { getSong, updateSongDisplay, updateSettings, type Song } from '$lib/db/db';
+	import { getSong, updateSongDisplay, updateSettings, type Song, type ParsedLine } from '$lib/db/db';
 	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
+	import { wrapChordLyricLine, computeMaxChars } from '$lib/utils/lineWrap';
 
 	let { isOpen, songId, onClose, onEdit } = $props<{
 		isOpen: boolean;
@@ -31,6 +32,67 @@
 	let song = $state<Song | null>(null);
 	let fontSize = $state(18);
 	let chordColour = $state('#6E36D1');
+
+	// --- Dynamic-width chord/lyric wrapping (see info/handoff-line-wrapping-fix.md) ---
+	// `formatParsedLineForDisplay()` aligns chords to lyrics via monospace
+	// character-column position, which only holds within a single visual line.
+	// Naive CSS wrapping breaks that alignment, so instead we measure the
+	// actual rendered width of `.chord-sheet` and font metrics, and compute
+	// where each overly-long line should break — applying the SAME break
+	// column to both the chord row and lyric row so they stay lined up
+	// exactly as if the user had pressed Enter there manually.
+	let chordSheetEl: HTMLDivElement | undefined = $state();
+	let containerWidth = $state(0);
+	let measuredFontFamily = $state('');
+
+	function updateMeasurements() {
+		if (!chordSheetEl) return;
+		containerWidth = chordSheetEl.clientWidth;
+		measuredFontFamily = getComputedStyle(chordSheetEl).fontFamily;
+	}
+
+	// Recompute on drawer open/song load, font-size toggle (element resize
+	// isn't the only trigger — column width itself changes with font-size),
+	// and on any actual container resize (drawer width change, orientation
+	// change, browser zoom). No ResizeObserver/measurement pattern existed
+	// elsewhere in the codebase to reuse, so this is a fresh, narrowly-scoped
+	// instance rather than a project-wide utility.
+	$effect(() => {
+		if (!chordSheetEl) return;
+		updateMeasurements();
+		const ro = new ResizeObserver(() => updateMeasurements());
+		ro.observe(chordSheetEl);
+		return () => ro.disconnect();
+	});
+
+	// fontSize is not read directly in updateMeasurements, but changing it
+	// changes the computed font metrics for the same element — re-run the
+	// measurement so maxChars (below) reflects the new character width.
+	$effect(() => {
+		void fontSize;
+		updateMeasurements();
+	});
+
+	let maxChars = $derived(computeMaxChars(containerWidth, fontSize, measuredFontFamily));
+
+	type DisplayLine = { key: string; chordRow: string; lyricRow: string; blank: boolean };
+
+	let displayLines = $derived.by((): DisplayLine[] => {
+		if (!song) return [];
+		const lines: DisplayLine[] = [];
+		for (const line of song.parsedLines as ParsedLine[]) {
+			const display = formatParsedLineForDisplay(line);
+			if (!display.chordRow && !display.lyricRow) {
+				lines.push({ key: `${line.id}-0`, chordRow: '', lyricRow: '', blank: true });
+				continue;
+			}
+			const wrapped = wrapChordLyricLine(display.chordRow, display.lyricRow, maxChars);
+			wrapped.forEach((w, i) => {
+				lines.push({ key: `${line.id}-${i}`, chordRow: w.chordRow, lyricRow: w.lyricRow, blank: false });
+			});
+		}
+		return lines;
+	});
 
 	// Display-only toggles (§7.2) — not persisted, keyboard grid is visible by
 	// default each time Chord Reader opens.
@@ -238,13 +300,12 @@
 		</div>
 		{/if}
 
-		<div class="chord-sheet" style="font-size:{fontSize}px; --chord-colour:{chordColour}">
-			{#each song.parsedLines as line (line.id)}
-				{@const display = formatParsedLineForDisplay(line)}
-				{#if display.chordRow || display.lyricRow}
+		<div class="chord-sheet" bind:this={chordSheetEl} style="font-size:{fontSize}px; --chord-colour:{chordColour}">
+			{#each displayLines as line (line.key)}
+				{#if !line.blank}
 					<div class="sheet-line">
-						<div class="chord-row">{display.chordRow || '\u00A0'}</div>
-						<div class="lyric-row">{display.lyricRow || '\u00A0'}</div>
+						<div class="chord-row">{line.chordRow || '\u00A0'}</div>
+						<div class="lyric-row">{line.lyricRow || '\u00A0'}</div>
 					</div>
 				{:else}
 					<div class="sheet-line-blank">&nbsp;</div>
@@ -464,13 +525,19 @@
 	.chord-row {
 		color: var(--chord-colour, var(--accent-brand));
 		font-weight: 700;
+		/* Both rows use `pre`, not `pre-wrap`: wrapping is handled upstream in
+		   JS (see wrapChordLyricLine/displayLines) so that chord and lyric
+		   rows always break at the exact same column and stay aligned. Each
+		   `line.chordRow`/`line.lyricRow` string here is already guaranteed
+		   to fit within the measured container width — see
+		   info/handoff-line-wrapping-fix.md. */
 		white-space: pre;
 		line-height: 1;
 		font-family: var(--font-family-mono);
 	}
 	.lyric-row {
 		font-weight: 400;
-		white-space: pre-wrap;
+		white-space: pre;
 		line-height: 1;
 		font-family: var(--font-family-mono);
 	}

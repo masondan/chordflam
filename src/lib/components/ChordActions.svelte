@@ -7,6 +7,7 @@
 	import { chordDisplayLabel } from '$lib/utils/chordToKeys';
 	import { detectKey, isMajorEdit } from '$lib/utils/keyDetection';
 	import { extractYouTubeId, getEmbedUrl } from '$lib/utils/videoEmbed';
+	import { wrapChordLyricLine, computeMaxChars } from '$lib/utils/lineWrap';
 	import {
 		getSong,
 		saveSong,
@@ -39,6 +40,56 @@
 	let chordList = $state<string[]>([]);
 	let parseError = $state(false);
 	let saveError = $state(false);
+
+	// --- Dynamic-width chord/lyric wrapping (see info/handoff-line-wrapping-fix.md) ---
+	// Same technique as ChordReader: formatParsedLineForDisplay() aligns chords
+	// to lyrics via monospace column position, which only holds on a single
+	// visual line. We measure the actual rendered width of .preview-canvas and
+	// break both rows together at the same column, rather than letting CSS
+	// wrap each row independently (which would desync chords from lyrics).
+	let previewCanvasEl: HTMLDivElement | undefined = $state();
+	let previewContainerWidth = $state(0);
+	let previewFontFamily = $state('');
+
+	function updatePreviewMeasurements() {
+		if (!previewCanvasEl) return;
+		previewContainerWidth = previewCanvasEl.clientWidth;
+		previewFontFamily = getComputedStyle(previewCanvasEl).fontFamily;
+	}
+
+	// ChordActions preview has no font-size toggle (unlike ChordReader) — it
+	// always renders at the base font size — so the only recompute trigger
+	// needed is an actual container resize (drawer open, window resize,
+	// orientation change).
+	$effect(() => {
+		if (!previewCanvasEl) return;
+		updatePreviewMeasurements();
+		const ro = new ResizeObserver(() => updatePreviewMeasurements());
+		ro.observe(previewCanvasEl);
+		return () => ro.disconnect();
+	});
+
+	let previewMaxChars = $derived(
+		computeMaxChars(previewContainerWidth, 18, previewFontFamily)
+	);
+
+	type PreviewDisplayLine = { key: string; chordRow: string; lyricRow: string; blank: boolean };
+
+	let previewDisplayLines = $derived.by((): PreviewDisplayLine[] => {
+		const lines: PreviewDisplayLine[] = [];
+		for (const line of parsedLines) {
+			const display = formatParsedLineForDisplay(line);
+			if (!display.chordRow && !display.lyricRow) {
+				lines.push({ key: `${line.id}-0`, chordRow: '', lyricRow: '', blank: true });
+				continue;
+			}
+			const wrapped = wrapChordLyricLine(display.chordRow, display.lyricRow, previewMaxChars);
+			wrapped.forEach((w, i) => {
+				lines.push({ key: `${line.id}-${i}`, chordRow: w.chordRow, lyricRow: w.lyricRow, blank: false });
+			});
+		}
+		return lines;
+	});
 
 	// Key tracking (§5.5, §5.9)
 	let originalKey = $state('');
@@ -994,16 +1045,15 @@
             {/if}
         </div>
         {:else}
-        <div class="preview-canvas">
+        <div class="preview-canvas" bind:this={previewCanvasEl}>
             {#if parsedLines.length === 0}
                 <p class="empty-preview">Nothing to preview yet.</p>
             {:else}
-                {#each parsedLines as line (line.id)}
-                    {@const display = formatParsedLineForDisplay(line)}
-                    {#if display.chordRow || display.lyricRow}
+                {#each previewDisplayLines as line (line.key)}
+                    {#if !line.blank}
                         <div class="preview-line">
-                            <div class="chord-row">{display.chordRow || '\u00A0'}</div>
-                            <div class="lyric-row">{display.lyricRow || '\u00A0'}</div>
+                            <div class="chord-row">{line.chordRow || '\u00A0'}</div>
+                            <div class="lyric-row">{line.lyricRow || '\u00A0'}</div>
                         </div>
                     {:else}
                         <div class="preview-line-blank">&nbsp;</div>
@@ -1292,7 +1342,12 @@
     	resize: none;
     	overflow: hidden;
     	font-family: var(--font-family-mono);
-    	white-space: pre;
+    	/* Plain visual wrap — there's no chord/lyric alignment to preserve here,
+    	   it's just raw bracket-notation text, so unlike the preview rows below
+    	   this needs no dynamic-width JS wrapping (see
+    	   info/handoff-line-wrapping-fix.md, Part 1). */
+    	white-space: pre-wrap;
+    	overflow-wrap: break-word;
     	background: var(--bg-main);
     }
     .placeholder-helper {
@@ -1341,8 +1396,10 @@
     	   scrollport nested inside the drawer's own scroll container. That's
     	   what caused the "sticky"/conflicting double-scrollbar bug (see
     	   AGENTS.md fix log). The drawer (Drawer.svelte) is the single source
-    	   of vertical scrolling now; long chord/lyric lines simply extend
-    	   past this box's edge rather than opening a competing scrollport. */
+    	   of vertical scrolling now. Long lines no longer just extend past this
+    	   box's edge, though — they're pre-wrapped in JS (previewDisplayLines,
+    	   see info/handoff-line-wrapping-fix.md) to the measured width of this
+    	   very element, via bind:this={previewCanvasEl} + ResizeObserver. */
     }
     .empty-preview {
     	color: var(--text-secondary);
@@ -1360,6 +1417,10 @@
     	color: var(--accent-brand);
     	font-weight: 700;
     	margin-bottom: 2px;
+    	/* `pre`, not `pre-wrap` — wrapping is done upstream in JS so chord and
+    	   lyric rows always break at the same column (see previewDisplayLines
+    	   above / info/handoff-line-wrapping-fix.md). Each row here is already
+    	   guaranteed to fit the measured container width. */
     	white-space: pre;
     	line-height: 1.2;
     	font-family: var(--font-family-mono);
