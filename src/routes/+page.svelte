@@ -4,7 +4,14 @@
 	import ChordReader from '$lib/components/ChordReader.svelte';
 	import ChordActions from '$lib/components/ChordActions.svelte';
 	import Icon from '$lib/components/icons/Icon.svelte';
-	import { getAllSongs, toggleFavourite, deleteSong, type Song } from '$lib/db/db';
+	import {
+		getAllSongs,
+		toggleFavourite,
+		deleteSong,
+		exportLibrary,
+		importLibrary,
+		type Song
+	} from '$lib/db/db';
 	import logotype from '../assets/logos/logo-chordflam-logotype.png';
 	import watermark from '../assets/logos/logo-chordflam-watermark.png';
 
@@ -15,6 +22,14 @@
 	let songs = $state<Song[]>([]);
 	let deleteModalOpen = $state(false);
 	let songToDeleteId = $state<string | null>(null);
+
+	// --- Import / Export (moved from ChordActions — see AGENTS.md /
+	// info/chordflam_planv2_updated.md §5.11 for original spec; this is a
+	// library-level operation, not a per-song one, so it lives on the
+	// chordLibrary home page rather than inside the ChordActions drawer). ---
+	let importExportOpen = $state(false);
+	let importFileInput: HTMLInputElement | undefined = $state();
+	let importMessage = $state('');
 
 	// Where ChordActions should return to on Cancel/Save & Close — set whenever
 	// it's opened, so editing from ChordReader (e.g. to change key) returns the
@@ -144,6 +159,42 @@
 		deleteModalOpen = false;
 		songToDeleteId = null;
 	}
+
+	async function handleExport() {
+		const json = await exportLibrary();
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `chordflam-export-${new Date().toISOString().slice(0, 10)}.json`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+
+	function triggerImport() {
+		importFileInput?.click();
+	}
+
+	async function handleImportFile(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		try {
+			const text = await file.text();
+			await importLibrary(text);
+			importMessage = 'Import successful.';
+			await refreshSongs();
+		} catch (err) {
+			console.error(err);
+			importMessage = 'Import failed — file may be invalid.';
+		} finally {
+			input.value = '';
+			setTimeout(() => (importMessage = ''), 4000);
+		}
+	}
 </script>
 
 <div class="library">
@@ -256,6 +307,43 @@
 			{/each}
 		</div>
 	{/if}
+
+	<div class="import-export-dropdown">
+		<button
+			type="button"
+			class="dropdown-toggle"
+			onclick={() => (importExportOpen = !importExportOpen)}
+			aria-expanded={importExportOpen}
+		>
+			<span class="dropdown-label">Import &amp; Export Chord Library</span>
+			<Icon
+				name={importExportOpen ? 'chevron-up' : 'chevron-down'}
+				size={18}
+				color="var(--text-secondary)"
+			/>
+		</button>
+		<hr class="dropdown-sep" />
+
+		{#if importExportOpen}
+			<div class="dropdown-content">
+				<p class="dropdown-helper">Share all chord sheets between devices</p>
+				<div class="dropdown-buttons">
+					<button class="btn-outline" onclick={handleExport}>Export</button>
+					<button class="btn-outline" onclick={triggerImport}>Import</button>
+					<input
+						type="file"
+						accept="application/json"
+						bind:this={importFileInput}
+						onchange={handleImportFile}
+						style="display: none;"
+					/>
+				</div>
+				{#if importMessage}
+					<p class="import-message">{importMessage}</p>
+				{/if}
+			</div>
+		{/if}
+	</div>
 </div>
 
 <ChordReader
@@ -283,6 +371,9 @@
 
 <style>
 	.library {
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
 		padding: var(--space-md);
 	}
 	header {
@@ -384,6 +475,13 @@
 		text-align: center;
 		padding: var(--space-xl) 0;
 		color: var(--text-secondary);
+		/* Fills remaining vertical space when the library is empty (or a
+		   search yields no matches), so the import/export dropdown below it
+		   is pushed to the bottom of the page rather than sitting directly
+		   under this block. Once there are enough song cards to fill/exceed
+		   the viewport, this branch isn't rendered at all — the dropdown
+		   just follows the song list in normal flow and scrolls with it. */
+		flex: 1 0 auto;
 	}
 	.watermark {
 		width: 75%;
@@ -508,5 +606,67 @@
 	}
 	.btn-empty-state:hover {
 		background-color: #4a1d99;
+	}
+	.import-export-dropdown {
+		/* Sits under the song cards in normal flow once there's enough
+		   content to scroll; when .songs is absent (empty library / no
+		   search results) the sibling .empty-state's flex:1 pushes this
+		   block down to the bottom of the viewport instead — see note on
+		   .empty-state above. */
+		margin-top: var(--space-lg);
+	}
+	.dropdown-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		border: none;
+		background: none;
+		padding: 0;
+		cursor: pointer;
+		font: inherit;
+		color: var(--text-primary);
+	}
+	.dropdown-label {
+		font-size: var(--text-h3);
+		font-weight: 400;
+	}
+	.dropdown-sep {
+		border: none;
+		border-top: 1px solid var(--color-separator);
+		margin: var(--space-sm) 0 0 0;
+	}
+	.dropdown-content {
+		padding-top: var(--space-md);
+	}
+	.dropdown-helper {
+		font-size: var(--text-sm, 0.9em);
+		color: var(--text-secondary);
+		margin: 0 0 var(--space-md) 0;
+	}
+	.dropdown-buttons {
+		display: flex;
+		gap: var(--space-md);
+	}
+	.btn-outline {
+		flex: 1 1 0;
+		height: 36px;
+		padding: 0 var(--space-sm);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border);
+		background: var(--bg-main);
+		color: #777777;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.btn-outline:hover {
+		border-color: #777777;
+	}
+	.import-message {
+		margin: var(--space-sm) 0 0 0;
+		font-size: 0.9em;
+		color: var(--text-secondary);
 	}
 </style>

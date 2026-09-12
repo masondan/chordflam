@@ -14,8 +14,6 @@
 		deleteSong,
 		getSettings,
 		updateSettings,
-		exportLibrary,
-		importLibrary,
 		addVideoLink,
 		updateVideoLink,
 		deleteVideoLink,
@@ -121,10 +119,6 @@
 	let showTitleRequiredModal = $state(false);
 	let showFixKeyModal = $state(false);
 	let fixKeyInput = $state('');
-
-	// Import/export
-	let importFileInput: HTMLInputElement | undefined = $state();
-	let importMessage = $state('');
 
 	// --- Video Links (see AGENTS.md / plan handoff §Video Links) ---
 	// For an existing (already-saved) song, video links are written to the
@@ -772,45 +766,6 @@
 		hasEverBeenModified = true;
 	}
 
-	// --- Import / Export (§5.11) ---
-
-	async function handleExport() {
-		const json = await exportLibrary();
-		const blob = new Blob([json], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `chordflam-export-${new Date().toISOString().slice(0, 10)}.json`;
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-		URL.revokeObjectURL(url);
-	}
-
-	function triggerImport() {
-		importFileInput?.click();
-	}
-
-	async function handleImportFile(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-
-		try {
-			const text = await file.text();
-			await importLibrary(text);
-			importMessage = 'Import successful.';
-			// Close the drawer after a brief delay so the user sees the success message,
-			// which triggers onClose in the parent and refreshes the song library.
-			setTimeout(() => onClose(), 1500);
-		} catch (err) {
-			console.error(err);
-			importMessage = 'Import failed — file may be invalid.';
-		} finally {
-			input.value = '';
-			setTimeout(() => (importMessage = ''), 4000);
-		}
-	}
 </script>
 
 <Drawer {isOpen}>
@@ -1129,28 +1084,7 @@
         </div>
         {/if}
         {/if}
-
-        <hr />
-
-        <div class="import-export">
-            <h3>Import & Export Chord Library</h3>
-            <p>Save all chord sheets to share between devices</p>
-            <div class="buttons">
-                <button class="toolbar-btn-style" onclick={handleExport}>Export</button>
-                <button class="toolbar-btn-style" onclick={triggerImport}>Import</button>
-                <input
-                    type="file"
-                    accept="application/json"
-                    bind:this={importFileInput}
-                    onchange={handleImportFile}
-                    style="display: none;"
-                />
-            </div>
-            {#if importMessage}
-                <p class="import-message">{importMessage}</p>
-            {/if}
-        </div>
-	</div>
+ </div>
 
 	{#if showUnsavedModal}
 	<div class="modal">
@@ -1313,21 +1247,6 @@
     }
     .toolbar-btn:disabled {
         opacity: 1;
-    }
-    .toolbar-btn-style {
-        height: 36px;
-        padding: 0 var(--space-sm);
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--color-border);
-        background: var(--bg-main);
-        color: #777777;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .toolbar-btn-style:hover {
-        border-color: #777777;
     }
     .textarea-wrapper {
         position: relative;
@@ -1636,28 +1555,6 @@
         border: none;
         border-top: 1px solid var(--color-separator);
         margin: var(--space-md) 0;
-    }
-    .import-export .buttons {
-        display: flex;
-        gap: var(--space-md);
-    }
-    .import-export .buttons .toolbar-btn-style {
-        flex: 1 1 0;
-    }
-    .import-export h3 {
-        margin: 0 0 var(--space-xs) 0;
-        font-size: var(--text-h3);
-        font-weight: 400;
-        color: var(--text-primary);
-    }
-    .import-export > p {
-        font-size: var(--text-sm, 0.9em);
-        color: var(--text-secondary);
-        margin: 0 0 var(--space-md) 0;
-    }
-    .import-message {
-        font-size: 0.9em;
-        color: var(--text-secondary);
     }
     .video-dropdown {
         display: flex;
