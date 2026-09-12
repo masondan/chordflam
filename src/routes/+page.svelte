@@ -26,10 +26,12 @@
 	// --- Import / Export (moved from ChordActions — see AGENTS.md /
 	// info/chordflam_planv2_updated.md §5.11 for original spec; this is a
 	// library-level operation, not a per-song one, so it lives on the
-	// chordLibrary home page rather than inside the ChordActions drawer). ---
-	let importExportOpen = $state(false);
+	// chordLibrary home page rather than inside the ChordActions drawer).
+	// Static section, no dropdown — see handoff notes on avoiding layout
+	// jump when toggling. Status is a small right-aligned badge on the
+	// title row rather than an inline message below the buttons. ---
 	let importFileInput: HTMLInputElement | undefined = $state();
-	let importMessage = $state('');
+	let importStatus = $state<'success' | 'error' | null>(null);
 
 	// Where ChordActions should return to on Cancel/Save & Close — set whenever
 	// it's opened, so editing from ChordReader (e.g. to change key) returns the
@@ -185,14 +187,14 @@
 		try {
 			const text = await file.text();
 			await importLibrary(text);
-			importMessage = 'Import successful.';
+			importStatus = 'success';
 			await refreshSongs();
 		} catch (err) {
 			console.error(err);
-			importMessage = 'Import failed — file may be invalid.';
+			importStatus = 'error';
 		} finally {
 			input.value = '';
-			setTimeout(() => (importMessage = ''), 4000);
+			setTimeout(() => (importStatus = null), 4000);
 		}
 	}
 </script>
@@ -308,41 +310,26 @@
 		</div>
 	{/if}
 
-	<div class="import-export-dropdown">
-		<button
-			type="button"
-			class="dropdown-toggle"
-			onclick={() => (importExportOpen = !importExportOpen)}
-			aria-expanded={importExportOpen}
-		>
-			<span class="dropdown-label">Import &amp; Export Chord Library</span>
-			<Icon
-				name={importExportOpen ? 'chevron-up' : 'chevron-down'}
-				size={18}
-				color="var(--text-secondary)"
+	<div class="import-export-panel">
+		<div class="import-export-title-row">
+			<span class="import-export-title">Export &amp; Import Library</span>
+			{#if importStatus}
+				<span class="status-pill" class:error={importStatus === 'error'}>
+					{importStatus === 'success' ? 'Success' : 'Error'}
+				</span>
+			{/if}
+		</div>
+		<div class="import-export-buttons">
+			<button class="btn-flat" onclick={handleExport}>Export</button>
+			<button class="btn-flat" onclick={triggerImport}>Import</button>
+			<input
+				type="file"
+				accept="application/json"
+				bind:this={importFileInput}
+				onchange={handleImportFile}
+				style="display: none;"
 			/>
-		</button>
-		<hr class="dropdown-sep" />
-
-		{#if importExportOpen}
-			<div class="dropdown-content">
-				<p class="dropdown-helper">Share all chord sheets between devices</p>
-				<div class="dropdown-buttons">
-					<button class="btn-outline" onclick={handleExport}>Export</button>
-					<button class="btn-outline" onclick={triggerImport}>Import</button>
-					<input
-						type="file"
-						accept="application/json"
-						bind:this={importFileInput}
-						onchange={handleImportFile}
-						style="display: none;"
-					/>
-				</div>
-				{#if importMessage}
-					<p class="import-message">{importMessage}</p>
-				{/if}
-			</div>
-		{/if}
+		</div>
 	</div>
 </div>
 
@@ -607,66 +594,60 @@
 	.btn-empty-state:hover {
 		background-color: #4a1d99;
 	}
-	.import-export-dropdown {
+	.import-export-panel {
 		/* Sits under the song cards in normal flow once there's enough
 		   content to scroll; when .songs is absent (empty library / no
 		   search results) the sibling .empty-state's flex:1 pushes this
 		   block down to the bottom of the viewport instead — see note on
-		   .empty-state above. */
+		   .empty-state above. Static section — no dropdown/toggle — so
+		   there's no layout jump on interaction (see handoff notes). */
 		margin-top: var(--space-lg);
+		padding: var(--space-md);
+		background: var(--bg-main);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
 	}
-	.dropdown-toggle {
+	.import-export-title-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		width: 100%;
-		border: none;
-		background: none;
-		padding: 0;
-		cursor: pointer;
-		font: inherit;
-		color: var(--text-primary);
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
 	}
-	.dropdown-label {
-		font-size: var(--text-h3);
-		font-weight: 400;
-	}
-	.dropdown-sep {
-		border: none;
-		border-top: 1px solid var(--color-separator);
-		margin: var(--space-sm) 0 0 0;
-	}
-	.dropdown-content {
-		padding-top: var(--space-md);
-	}
-	.dropdown-helper {
-		font-size: var(--text-sm, 0.9em);
+	.import-export-title {
+		font-size: var(--text-base);
+		font-weight: 700;
 		color: var(--text-secondary);
-		margin: 0 0 var(--space-md) 0;
 	}
-	.dropdown-buttons {
+	.status-pill {
+		flex-shrink: 0;
+		font-size: var(--text-xs, 0.75rem);
+		color: #ffffff;
+		background: var(--text-secondary);
+		padding: 2px var(--space-sm);
+		border-radius: var(--radius-full);
+	}
+	.status-pill.error {
+		background: var(--color-danger, #d9383a);
+	}
+	.import-export-buttons {
 		display: flex;
 		gap: var(--space-md);
 	}
-	.btn-outline {
+	.btn-flat {
 		flex: 1 1 0;
-		height: 36px;
-		padding: 0 var(--space-sm);
+		height: 44px;
 		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border);
-		background: var(--bg-main);
-		color: #777777;
+		border: none;
+		background: var(--bg-surface-dark);
+		color: var(--text-secondary);
+		font-weight: 600;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
-	.btn-outline:hover {
-		border-color: #777777;
-	}
-	.import-message {
-		margin: var(--space-sm) 0 0 0;
-		font-size: 0.9em;
-		color: var(--text-secondary);
+	.btn-flat:hover {
+		background: #e6e6e6;
 	}
 </style>
